@@ -107,6 +107,9 @@ class Solution:
 
 
 class Scheduler:
+    OFF_SHIFT = 0
+    NIGHT_SHIFT = 1
+
     def __init__(self, config: Config):
         self.config = config
         self.model = CpoModel()
@@ -140,8 +143,12 @@ class Scheduler:
         # non-off shifts must not be 0 hours, and off shifts must be 0 hours
         for e in range(self.config.n_employees):
             for n in range(self.config.n_days):
-                self.model.add(if_then(self.shifts[e][n] == 0, self.hours[e][n] == 0))
-                self.model.add(if_then(self.shifts[e][n] != 0, self.hours[e][n] > 0))
+                self.model.add(
+                    if_then(self.shifts[e][n] == self.OFF_SHIFT, self.hours[e][n] == 0)
+                )
+                self.model.add(
+                    if_then(self.shifts[e][n] != self.OFF_SHIFT, self.hours[e][n] > 0)
+                )
 
         # business needs
         for n in range(self.config.n_days):
@@ -179,7 +186,24 @@ class Scheduler:
                 self.model.add(work_in_week >= self.config.employee_min_weekly)
                 self.model.add(work_in_week <= self.config.employee_max_weekly)
 
-        # TODO: night shift rules
+        # consecutive night shift rules
+        for e in range(self.config.n_employees):
+            self.model.add(
+                sequence(
+                    0,
+                    self.config.employee_max_consecutive_night_shifts,
+                    self.config.employee_max_consecutive_night_shifts + 1,
+                    self.shifts[e],
+                    [self.NIGHT_SHIFT],
+                    integer_var_list(1),
+                )
+            )
+        # total night shifts
+        for e in range(self.config.n_employees):
+            self.model.add(
+                count(self.shifts[e], self.NIGHT_SHIFT)
+                <= self.config.employee_max_total_night_shifts
+            )
 
     def solve(self) -> Solution:
         print(self.config)
@@ -204,7 +228,7 @@ class Scheduler:
             for j in range(self.config.n_days):
                 shift = solution[employee_shifts[j]]
                 hours = solution[employee_hours[j]]
-                if shift == 0:  # off shift
+                if shift == self.OFF_SHIFT:
                     employee_schedule.append((-1, -1))
                 else:
                     employee_schedule.append(
