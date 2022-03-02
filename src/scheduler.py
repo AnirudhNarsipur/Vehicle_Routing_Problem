@@ -115,6 +115,9 @@ class Scheduler:
     def build_constraints(self):
         self.shifts = []
         self.hours = []
+        # domains cover min and max daily works
+        # shift length is covered by the shift lengths for 24 hour, 3 shift days
+        # this is not true in general, but we leave it out for optimization
         for _ in range(self.config.n_employees):
             self.shifts.append(
                 integer_var_list(
@@ -134,22 +137,52 @@ class Scheduler:
                 )
             )
 
-        # fulfill business needs
+        # non-off shifts must not be 0 hours, and off shifts must be 0 hours
+        for e in range(self.config.n_employees):
+            for n in range(self.config.n_days):
+                self.model.add(if_then(self.shifts[e][n] == 0, self.hours[e][n] == 0))
+                self.model.add(if_then(self.shifts[e][n] != 0, self.hours[e][n] > 0))
+
+        # business needs
         for n in range(self.config.n_days):
             self.model.add(
-                sum([self.hours[i][n] for i in range(self.config.n_employees)])
+                sum([self.hours[e][n] for e in range(self.config.n_employees)])
                 >= self.config.min_daily
             )
             for shift in range(self.config.n_shifts):
                 self.model.add(
                     count(
-                        [self.shifts[i][n] for i in range(self.config.n_employees)],
+                        [self.shifts[e][n] for e in range(self.config.n_employees)],
                         shift,
                     )
                     >= self.config.min_shifts[n][shift]
                 )
 
+        # training requirements
+        for e in range(self.config.n_employees):
+            self.model.add(all_diff(self.shifts[e][: self.config.n_shifts]))
+
+        # weekly work
+        for e in range(self.config.n_employees):
+            for w in range(self.config.n_weeks):
+                work_in_week = sum(
+                    [
+                        self.hours[e][d]
+                        for d in range(
+                            w * self.config.n_days_in_week,
+                            min(
+                                (w + 1) * self.config.n_days_in_week, self.config.n_days
+                            ),
+                        )
+                    ]
+                )
+                self.model.add(work_in_week >= self.config.employee_min_weekly)
+                self.model.add(work_in_week <= self.config.employee_max_weekly)
+
+        # TODO: night shift rules
+
     def solve(self) -> Solution:
+        print(self.config)
         solution = self.model.solve()
         n_fails = solution.get_solver_info(CpoSolverInfos.NUMBER_OF_FAILS)
         if not solution:
@@ -178,6 +211,7 @@ class Scheduler:
                         (shift_starts[shift], shift_starts[shift] + hours)
                     )
             schedule.append(employee_schedule)
+
         return schedule
 
     @staticmethod
