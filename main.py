@@ -7,8 +7,15 @@ from docplex.cp.config import context
 
 from src.scheduler import Schedule, Scheduler
 
-context.solver.agent = "local"
-context.solver.local.execfile = os.environ["CP_SOLVER_EXEC"]
+
+def set_context():
+    solver_exec = Path(os.environ["CP_SOLVER_EXEC"])
+    if not solver_exec.exists():
+        solver_exec = Path("bin/cpoptimizer")
+    print(f"Using cp installation at {solver_exec}")
+    context.solver.agent = "local"
+    context.solver.local.execfile = str(solver_exec)
+
 
 parser = ArgumentParser()
 parser.add_argument("input_file", type=str)
@@ -37,6 +44,7 @@ def visualize(schedule: Schedule):
 
 
 def main(args):
+    set_context()
     input_file = Path(args.input_file)
     filename = input_file.name
     scheduler = Scheduler.from_file(args.input_file)
