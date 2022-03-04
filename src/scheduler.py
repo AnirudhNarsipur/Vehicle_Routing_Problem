@@ -147,8 +147,15 @@ class Scheduler:
                     if_then(self.shifts[e][n] == self.OFF_SHIFT, self.hours[e][n] == 0)
                 )
                 self.model.add(
+                    if_then(self.hours[e][n] == 0,self.shifts[e][n] == self.OFF_SHIFT)
+                )
+                self.model.add(
                     if_then(self.shifts[e][n] != self.OFF_SHIFT, self.hours[e][n] > 0)
                 )
+                self.model.add(
+                    if_then(self.hours[e][n] > 0,self.shifts[e][n] != self.OFF_SHIFT)
+                )
+
 
         # business needs
         for n in range(self.config.n_days):
