@@ -188,16 +188,24 @@ class Scheduler:
 
         # consecutive night shift rules
         for e in range(self.config.n_employees):
-            self.model.add(
-                sequence(
-                    0,
-                    self.config.employee_max_consecutive_night_shifts,
-                    self.config.employee_max_consecutive_night_shifts + 1,
-                    self.shifts[e],
-                    [self.NIGHT_SHIFT],
-                    integer_var_list(1),
+            # optimization because we know employee_max_consecutive_night_shifts=1
+            for d in range(self.config.n_days - 1):
+                self.model.add(
+                    if_then(
+                        self.shifts[e][d] == self.NIGHT_SHIFT,
+                        self.shifts[e][d + 1] != self.NIGHT_SHIFT,
+                    )
                 )
-            )
+            # self.model.add(
+            #     sequence(
+            #         0,
+            #         self.config.employee_max_consecutive_night_shifts,
+            #         self.config.employee_max_consecutive_night_shifts + 1,
+            #         self.shifts[e],
+            #         [self.NIGHT_SHIFT],
+            #         integer_var_list(1),
+            #     )
+            # )
         # total night shifts
         for e in range(self.config.n_employees):
             self.model.add(
@@ -209,10 +217,10 @@ class Scheduler:
         print(self.config)
         solution = self.model.solve()
         n_fails = solution.get_solver_info(CpoSolverInfos.NUMBER_OF_FAILS)
-        if not solution:
-            return Solution(false, n_fails, None)
+        if not solution.is_solution():
+            return Solution(False, n_fails, None)
         schedule = self.construct_schedule(solution)
-        return Solution(true, n_fails, schedule)
+        return Solution(True, n_fails, schedule)
 
     def construct_schedule(self, solution: CpoSolveResult) -> Schedule:
         shift_starts = {}

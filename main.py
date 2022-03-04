@@ -50,18 +50,24 @@ def main(args):
     scheduler = Scheduler.from_file(args.input_file)
     start_time = datetime.now()
     solution = scheduler.solve()
-    serialized_schedule = []
-    for employee_schedule in solution.schedule:
-        for start, end in employee_schedule:
-            serialized_schedule.append(str(start))
-            serialized_schedule.append(str(end))
-    serialized_schedule = " ".join(serialized_schedule)
     end_time = datetime.now()
     delta = round((end_time - start_time).total_seconds() * 100) / 100
-    visualize(solution.schedule)
-    print(
-        f'{{"Instance": "{filename}", "Time": {delta}, "Result": {solution.n_fails}, "Solution": "{serialized_schedule}"}}'
-    )
+
+    if solution.is_solution:
+        serialized_schedule = []
+        for employee_schedule in solution.schedule:
+            for start, end in employee_schedule:
+                serialized_schedule.append(str(start))
+                serialized_schedule.append(str(end))
+        serialized_schedule = " ".join(serialized_schedule)
+        visualize(solution.schedule)
+        print(
+            f'{{"Instance": "{filename}", "Time": {delta}, "Result": {solution.n_fails}, "Solution": "{serialized_schedule}"}}'
+        )
+    else:
+        print(
+            f'{{"Instance": "{filename}", "Time": {delta}, "Result": {solution.n_fails}"}}'
+        )
 
 
 if __name__ == "__main__":
