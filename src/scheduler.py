@@ -222,6 +222,8 @@ class Scheduler:
 
     def solve(self) -> Solution:
         print(self.config)
+        params = CpoParameters(SearchType="DepthFirst")
+        self.model.set_parameters(params)
         solution = self.model.solve()
         n_fails = solution.get_solver_info(CpoSolverInfos.NUMBER_OF_FAILS)
         if not solution.is_solution():
