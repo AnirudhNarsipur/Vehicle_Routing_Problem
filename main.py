@@ -60,7 +60,7 @@ def main(args):
                 serialized_schedule.append(str(start))
                 serialized_schedule.append(str(end))
         serialized_schedule = " ".join(serialized_schedule)
-        visualize(solution.schedule)
+        # visualize(solution.schedule)
         print(
             f'{{"Instance": "{filename}", "Time": {delta}, "Result": {solution.n_fails}, "Solution": "{serialized_schedule}"}}'
         )

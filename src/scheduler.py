@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+from docplex.cp.config import *
 from docplex.cp.model import *
+
+# silence logs
+context.set_attribute("log_output", None)
 
 
 @dataclass
@@ -69,6 +74,7 @@ class Config:
         min_shifts = []
         for i in range(0, n_days * n_shifts, n_shifts):
             min_shifts.append(params["Business_minDemandDayShift"][i : i + n_shifts])
+        min_shifts = np.array(min_shifts)
         min_daily = params["Business_minDailyOperation"]
         employee_min_daily = params["Employee_minConsecutiveWork"]
         employee_max_daily = params["Employee_maxDailyWork"]
@@ -139,42 +145,44 @@ class Scheduler:
                     ],
                 )
             )
+        # convert to numpy arrays
+        self.shifts = np.array(self.shifts)
+        self.hours = np.array(self.hours)
 
         # non-off shifts must not be 0 hours, and off shifts must be 0 hours
         for e in range(self.config.n_employees):
             for n in range(self.config.n_days):
                 self.model.add(
-                    if_then(self.shifts[e][n] == self.OFF_SHIFT, self.hours[e][n] == 0)
+                    if_then(self.shifts[e, n] == self.OFF_SHIFT, self.hours[e, n] == 0)
                 )
                 self.model.add(
-                    if_then(self.hours[e][n] == 0,self.shifts[e][n] == self.OFF_SHIFT)
+                    if_then(self.hours[e, n] == 0, self.shifts[e, n] == self.OFF_SHIFT)
                 )
                 self.model.add(
-                    if_then(self.shifts[e][n] != self.OFF_SHIFT, self.hours[e][n] > 0)
+                    if_then(self.shifts[e, n] != self.OFF_SHIFT, self.hours[e, n] > 0)
                 )
                 self.model.add(
-                    if_then(self.hours[e][n] > 0,self.shifts[e][n] != self.OFF_SHIFT)
+                    if_then(self.hours[e, n] > 0, self.shifts[e, n] != self.OFF_SHIFT)
                 )
-
 
         # business needs
         for n in range(self.config.n_days):
             self.model.add(
-                sum([self.hours[e][n] for e in range(self.config.n_employees)])
+                sum([self.hours[e, n] for e in range(self.config.n_employees)])
                 >= self.config.min_daily
             )
             for shift in range(self.config.n_shifts):
                 self.model.add(
                     count(
-                        [self.shifts[e][n] for e in range(self.config.n_employees)],
+                        [self.shifts[e, n] for e in range(self.config.n_employees)],
                         shift,
                     )
-                    >= self.config.min_shifts[n][shift]
+                    >= self.config.min_shifts[n, shift]
                 )
 
         # training requirements
         for e in range(self.config.n_employees):
-            self.model.add(all_diff(self.shifts[e][: self.config.n_shifts]))
+            self.model.add(all_diff(self.shifts[e, : self.config.n_shifts].tolist()))
 
         # weekly work
         for e in range(self.config.n_employees):
@@ -199,8 +207,8 @@ class Scheduler:
             for d in range(self.config.n_days - 1):
                 self.model.add(
                     if_then(
-                        self.shifts[e][d] == self.NIGHT_SHIFT,
-                        self.shifts[e][d + 1] != self.NIGHT_SHIFT,
+                        self.shifts[e, d] == self.NIGHT_SHIFT,
+                        self.shifts[e, d + 1] != self.NIGHT_SHIFT,
                     )
                 )
             # self.model.add(
@@ -216,14 +224,54 @@ class Scheduler:
         # total night shifts
         for e in range(self.config.n_employees):
             self.model.add(
-                count(self.shifts[e], self.NIGHT_SHIFT)
+                count(self.shifts[e, :].tolist(), self.NIGHT_SHIFT)
                 <= self.config.employee_max_total_night_shifts
             )
 
     def solve(self) -> Solution:
-        print(self.config)
+        # print(self.config)
         params = CpoParameters(SearchType="DepthFirst")
         self.model.set_parameters(params)
+
+        training_phase = search_phase(
+            vars=self.hours[:, : self.config.n_shifts].ravel().tolist()
+            + self.shifts[:, : self.config.n_shifts].ravel().tolist()
+        )
+
+        main_hours_phase = search_phase(
+            vars=self.hours.ravel().tolist(),
+            varchooser=select_random_var(),
+            valuechooser=select_random_value(),
+        )
+        main_shifts_phase = search_phase(
+            vars=self.shifts.ravel().tolist(),
+            varchooser=select_random_var(),
+            valuechooser=select_random_value(),
+        )
+
+        main_phase = search_phase(
+            vars=None,
+            varchooser=select_smallest(domain_size()),
+            valuechooser=select_random_value(),
+        )
+        # self.model.set_search_phases(
+        #     [training_phase, main_hours_phase, main_shifts_phase]
+        # )
+        self.model.set_search_phases([training_phase])
+        # self.model.add_search_phase(main_phase)
+
+        total_failed = 0
+        fail_limit = 100
+        growth = 1.15
+        while True:
+            self.model.set_parameters(FailLimit=total_failed + fail_limit)
+
+            solution = self.model.solve()
+            if solution.get_search_status() != SEARCH_STATUS_STOPPED:
+                break
+            total_failed += fail_limit
+            fail_limit = int(fail_limit * growth)
+
         solution = self.model.solve()
         n_fails = solution.get_solver_info(CpoSolverInfos.NUMBER_OF_FAILS)
         if not solution.is_solution():
