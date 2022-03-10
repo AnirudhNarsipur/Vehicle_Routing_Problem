@@ -5,7 +5,7 @@ from pathlib import Path
 
 from docplex.cp.config import context
 
-from src.scheduler import Schedule, Scheduler
+from scheduler import Schedule, Scheduler
 
 
 def set_context():
