@@ -13,7 +13,7 @@ fi
 input=$1
 
 # change this for your own installations!
-export CP_SOLVER_EXEC=/Applications/CPLEX_Studio201/cpoptimizer/bin/x86-64_osx/cpoptimizer
+export CP_SOLVER_EXEC=/Applications/CPLEX_Studio129/cpoptimizer/bin/x86-64_osx/cpoptimizer
 
 # run the solver
-python3 src/main.py $input
+python src/main.py $input

@@ -9,12 +9,12 @@ from scheduler import Schedule, Scheduler
 
 
 def set_context():
-    if "CP_SOLVER_EXEC" not in os.environ:
-        solver_exec = Path("bin/cpoptimizer")
+    if not("CP_SOLVER_EXEC" in os.environ):
+        solver_exec = Path("src/bin/cpoptimizer")
     else:
         solver_exec = Path(os.environ["CP_SOLVER_EXEC"])
         if not solver_exec.exists():
-            solver_exec = Path("bin/cpoptimizer")
+            solver_exec = Path("src/bin/cpoptimizer")
     print(f"Using cp installation at {solver_exec}")
     context.solver.agent = "local"
     context.solver.local.execfile = str(solver_exec)
