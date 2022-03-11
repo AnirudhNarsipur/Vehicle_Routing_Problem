@@ -48,7 +48,7 @@ def training_phase(model: Scheduler):
 
 def run_experiment(file: str):
     cfg = Config.load(file)
-    timelimit = 1
+    timelimit = 15
     search_space = itertools.product(
         var_evaluators.keys(), val_evaluators.keys(), var_selectors, val_selectors
     )
@@ -65,10 +65,15 @@ def run_experiment(file: str):
             else val_sel(),
         )
         sched.model.set_search_phases([phase])
-        solution = sched.model.solve(params=params)
+        solution = None
+        try:
+            solution = sched.model.solve(params=params)
+        except:
+            # print(f"Failed solve for {search}")
+            continue
         print(
             f"File: {file} | Variable: {var_sel.__name__}({var_k}) | Value: {var_sel.__name__}({val_k})\nSearch status: {solution.get_solve_status()} Time: {solution.get_solve_time()}"
         )
 
 
-run_experiment(files[0])
+# run_experiment(files[2])
