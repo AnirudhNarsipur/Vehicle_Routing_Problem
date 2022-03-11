@@ -230,7 +230,9 @@ class Scheduler:
 
     def solve(self) -> Solution:
         # print(self.config)
-        params = CpoParameters(DefaultInferenceLevel="Extended")
+        params = CpoParameters(
+            SearchType="DepthFirst", DefaultInferenceLevel="Extended"
+        )
         self.model.set_parameters(params)
 
         training_phase = search_phase(
