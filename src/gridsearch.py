@@ -45,7 +45,8 @@ def training_phase(model: Scheduler):
         + model.shifts[:, : model.config.n_shifts].ravel().tolist()
     )
 
-
+# Runs an experiment on a the input file given by fl
+# exploring all possible variable/value selectors as defined above
 def run_experiment(file: str):
     cfg = Config.load(file)
     timelimit = 15
