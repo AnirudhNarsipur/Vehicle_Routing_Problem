@@ -230,39 +230,19 @@ class Scheduler:
 
     def solve(self) -> Solution:
         # print(self.config)
-        params = CpoParameters(SearchType="DepthFirst")
+        params = CpoParameters(DefaultInferenceLevel="Extended")
         self.model.set_parameters(params)
 
         training_phase = search_phase(
             vars=self.hours[:, : self.config.n_shifts].ravel().tolist()
             + self.shifts[:, : self.config.n_shifts].ravel().tolist()
         )
-
-        main_hours_phase = search_phase(
-            vars=self.hours.ravel().tolist(),
-            varchooser=select_random_var(),
-            valuechooser=select_random_value(),
-        )
-        main_shifts_phase = search_phase(
-            vars=self.shifts.ravel().tolist(),
-            varchooser=select_random_var(),
-            valuechooser=select_random_value(),
-        )
-
-        main_phase = search_phase(
-            vars=None,
-            varchooser=select_smallest(domain_size()),
-            valuechooser=select_random_value(),
-        )
-        # self.model.set_search_phases(
-        #     [training_phase, main_hours_phase, main_shifts_phase]
-        # )
         self.model.set_search_phases([training_phase])
-        # self.model.add_search_phase(main_phase)
 
         total_failed = 0
         fail_limit = 100
         growth = 1.15
+        solution = None
         while True:
             self.model.set_parameters(FailLimit=total_failed + fail_limit)
 
@@ -272,7 +252,6 @@ class Scheduler:
             total_failed += fail_limit
             fail_limit = int(fail_limit * growth)
 
-        solution = self.model.solve()
         n_fails = solution.get_solver_info(CpoSolverInfos.NUMBER_OF_FAILS)
         if not solution.is_solution():
             return Solution(False, n_fails, None)
