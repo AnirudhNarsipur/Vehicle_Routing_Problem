@@ -239,7 +239,13 @@ class Scheduler:
             vars=self.hours[:, : self.config.n_shifts].ravel().tolist()
             + self.shifts[:, : self.config.n_shifts].ravel().tolist()
         )
-        self.model.set_search_phases([training_phase])
+        main_phase = search_phase(
+            vars=self.hours[:, self.config.n_shifts:].ravel().tolist()
+            + self.shifts[:, self.config.n_shifts:].ravel().tolist(),
+            varchooser=select_random_var(),
+            valuechooser=select_random_value(),
+        )
+        self.model.set_search_phases([training_phase, main_phase])
 
         total_failed = 0
         fail_limit = 100
