@@ -16,4 +16,4 @@ input=$1
 export CP_SOLVER_EXEC=/Applications/CPLEX_Studio129/cpoptimizer/bin/x86-64_osx/cpoptimizer
 
 # run the solver
-python src/main.py $input
+python3.9 src/main.py $input

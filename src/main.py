@@ -1,11 +1,12 @@
+from dataclasses import dataclass
 import os
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
-
+import numpy as np
 from docplex.cp.config import context
-
-from scheduler import Schedule, Scheduler
+from docplex.cp.config import *
+from docplex.cp.model import *
 
 
 def set_context():
@@ -15,7 +16,7 @@ def set_context():
         solver_exec = Path(os.environ["CP_SOLVER_EXEC"])
         if not solver_exec.exists():
             solver_exec = Path("src/bin/cpoptimizer")
-    print(f"Using cp installation at {solver_exec}")
+    # print(f"Using cp installation at {solver_exec}")
     context.solver.agent = "local"
     context.solver.local.execfile = str(solver_exec)
 
@@ -23,54 +24,58 @@ def set_context():
 parser = ArgumentParser()
 parser.add_argument("input_file", type=str)
 
-# lifted right out of the Java support code. Janky af
-def visualize(schedule: Schedule):
-    for e in range(len(schedule)):
-        print("E" + str(e + 1) + ": ", end="")
-        if e < 9:
-            print(" ", end="")
-        for d in range(len(schedule[0])):
-            for i in range(24):
-                if i % 8 == 0:
-                    print("|", end="")
-                if (
-                    schedule[e][d][0] != schedule[e][d][1]
-                    and i >= schedule[e][d][0]
-                    and i < schedule[e][d][1]
-                ):
-                    print("+", end="")
-                else:
-                    print(".", end="")
+@dataclass()
+class VRP:
+    customers : int
+    vehicles : int
+    capacity : int
+    demand  : list[int]
+    depot_location : tuple
+    positions : np.ndarray
 
-            print("|", end="")
-        print(" ")
-
-
+def read_input(fl : str):
+    with open(fl,"r") as f:
+        lines = f.readlines()
+    lines = [i.split() for i in lines]
+    customers,vehicles,capacity = [int(i) for i in lines[0]]
+    depot_location = (int(lines[1][1]),int(lines[1][2]))
+    demand = []
+    positions = []
+    for i in range(2,customers+1):
+        demand.append(int(lines[i][0]))
+        positions.append([int(lines[i][j]) for j in range(1,3)])
+    positions = np.array([np.array(i) for i in positions])
+    return VRP(customers-1,vehicles,capacity,demand,depot_location,positions)
 def main(args):
     set_context()
     input_file = Path(args.input_file)
     filename = input_file.name
-    scheduler = Scheduler.from_file(args.input_file)
-    start_time = datetime.now()
-    solution = scheduler.solve()
-    end_time = datetime.now()
-    delta = round((end_time - start_time).total_seconds() * 100) / 100
+    vars =  read_input(filename)
+    solve(vars)
 
-    if solution.is_solution:
-        serialized_schedule = []
-        for employee_schedule in solution.schedule:
-            for start, end in employee_schedule:
-                serialized_schedule.append(str(start))
-                serialized_schedule.append(str(end))
-        serialized_schedule = " ".join(serialized_schedule)
-        # visualize(solution.schedule)
-        print(
-            f'{{"Instance": "{filename}", "Time": {delta}, "Result": {solution.n_fails}, "Solution": "{serialized_schedule}"}}'
+def solve(vars):
+    model = CpoModel()
+    truck_routes = []
+    for _ in range(0,vars.vehicles):
+        truck_routes.append(
+            integer_var_list(vars.customers+2,-1,vars.customers)
         )
-    else:
-        print(
-            f'{{"Instance": "{filename}", "Time": {delta}, "Result": {solution.n_fails}"}}'
-        )
+    truck_routes = np.array(truck_routes)
+    #always start at depot
+    for i in range(0,len(truck_routes)):
+        model.add(equals(
+            truck_routes[i,0],0
+        ))
+    # each customer occurs exactly once
+    for c in range(1,vars.customers+1):
+        model.add(equal(count(truck_routes.ravel().tolist(),c), 1))
+    # total served by each truck <= capacity
+    for i in range(0,len(truck_routes)):
+        acc = 0
+        for j in range(0,truck_routes.shape[1]):
+            model.add(if_then(truck_routes[i,j] > 0,sum(acc,vars.demand[truck_routes[i,j]])))
+        model.add(acc <= vars.capacity)
+
 
 
 if __name__ == "__main__":
