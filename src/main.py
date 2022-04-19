@@ -84,15 +84,12 @@ def solve(vars : VRP):
                 model.add(if_then(customer_assigs[i,0] == customer_assigs[j,0],
             customer_assigs[i,1] != customer_assigs[j,1]))
     truck_capacities  =[[] for i in builtin_range(vars.vehicles)] # List of Lists 
-
     for c in builtin_range(0,len(customer_assigs)):
         for t in builtin_range(1,vars.vehicles+1):
            truck_capacities[t-1].append(times(count([customer_assigs[c,0]],t),vars.demand[c]))
     for vehicle_demand in truck_capacities:
         model.add(sum(vehicle_demand) <= vars.capacity)
     #Got to be consecutive
-    # customers_per_truck = [0 for i in range(vars.vehicles)]
-    last_cust = binary_var_list(vars.customers)
     for t in builtin_range(1,vars.vehicles+1):
         customers_per_truck = count(customer_assigs[:,0].ravel().tolist(),t)
         for c in builtin_range(vars.customers):
@@ -100,60 +97,7 @@ def solve(vars : VRP):
                 customer_assigs[c,0] == t,
                 customer_assigs[c,1] <= customers_per_truck
             ))
-            model.add(if_then(
-               logical_and(customer_assigs[c,1] == t,customer_assigs[c,1] == customers_per_truck),
-               last_cust[c] == 1
-            ))
-            model.add(if_then(
-               logical_not(logical_and(customer_assigs[c,1] == t,customer_assigs[c,1] == customers_per_truck)),
-               last_cust[c] == 0
-            ))
-
-     # Objective   
-    # Transition matrix
-    trans_mat = []
-    for i in range(vars.customers):
-        trans_mat.append(binary_var_list(vars.customers))
-    trans_mat = np.array([np.array(i) for i in trans_mat])
-    for i in range(vars.customers):
-        for j in range(vars.customers):
-            if i==j:
-                model.add(trans_mat[i,j] == 0)
-            else:
-                
-                model.add(
-                    if_then(
-                        logical_and((customer_assigs[i,0] == customer_assigs[j,0]) , (plus(customer_assigs[i,1],1) == customer_assigs[j,1])),
-                        trans_mat[i,j] == 1
-
-                    )
-                 )
-                model.add(
-                    if_then(
-                       logical_not(logical_and(equal(customer_assigs[i,0],customer_assigs[j,0]) ,  equal(plus(customer_assigs[i,1],1) , customer_assigs[j,1]))),
-                        trans_mat[i,j] == 0
-
-                    )
-                 )
-    distExpr = []
-    first_cust = binary_var_list(vars.customers)
-    depot_distances = []
-    for i in builtin_range(vars.customers):
-        depot_distances.append(get_distance(vars.depot_location,vars.positions[i]))
-    for i in builtin_range(vars.customers): 
-        model.add(if_then(
-            customer_assigs[i,1] == 1,first_cust[i] == 1
-        ))
-        model.add(if_then(
-            customer_assigs[i,1] != 1,first_cust[i] == 0 
-        ))
-
-        for j in builtin_range(vars.customers):
-            if i!=j:
-                distExpr.append(times(trans_mat[i,j],vars.distance_matrix[i,j]))
-    # model.minimize(sum([sum(distExpr),scal_prod(first_cust,depot_distances),scal_prod(last_cust,depot_distances)]))
-    model.set_parameters(CpoParameters(LogVerbosity="Terse",SolutionLimit=2))
-    
+    model.set_parameters(CpoParameters(LogVerbosity="Terse"))
     solution : CpoSolveResult = model.solve()
     if not solution.is_solution():
         return 
@@ -162,10 +106,9 @@ def solve(vars : VRP):
     for c in range(vars.customers):
         t,n = solution[customer_assigs[c,0]],solution[customer_assigs[c,1]]
         sol_routes[t-1,n] = c + 1
-    
-    
     s  = get_stdout(vars,sol_routes.astype(int),solution.is_solution_optimal())
     write_sol(s,"test.vrp")
+
 def write_sol(s : Solution,fl):
     with open(fl,"w") as f:
         f.write(f"{s.objective} {0} \n")
@@ -179,10 +122,8 @@ def get_stdout(vars :VRP,sol_routes,opt):
     obj = 0
     all_routes = []
     for i in builtin_range(sol_routes.shape[0]):
-        # print(f"i is {i}")/
         route = []
         for j in builtin_range(sol_routes.shape[1]):
-            # print(f"j is {j}")
             route.append(sol_routes[i,j])
             if j==0:
                 obj+=get_distance(vars.depot_location,vars.positions[sol_routes[i,j+1]-1])
