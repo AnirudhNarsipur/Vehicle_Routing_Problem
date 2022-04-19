@@ -92,12 +92,21 @@ def solve(vars : VRP):
         model.add(sum(vehicle_demand) <= vars.capacity)
     #Got to be consecutive
     # customers_per_truck = [0 for i in range(vars.vehicles)]
+    last_cust = binary_var_list(vars.customers)
     for t in builtin_range(1,vars.vehicles+1):
         customers_per_truck = count(customer_assigs[:,0].ravel().tolist(),t)
         for c in builtin_range(vars.customers):
             model.add(if_then(
                 customer_assigs[c,0] == t,
                 customer_assigs[c,1] <= customers_per_truck
+            ))
+            model.add(if_then(
+               logical_and(customer_assigs[c,1] == t,customer_assigs[c,1] == customers_per_truck),
+               last_cust[c] == 1
+            ))
+            model.add(if_then(
+               logical_not(logical_and(customer_assigs[c,1] == t,customer_assigs[c,1] == customers_per_truck)),
+               last_cust[c] == 0
             ))
 
      # Objective   
@@ -127,12 +136,24 @@ def solve(vars : VRP):
                     )
                  )
     distExpr = []
+    first_cust = binary_var_list(vars.customers)
+    depot_distances = []
     for i in builtin_range(vars.customers):
+        depot_distances.append(get_distance(vars.depot_location,vars.positions[i]))
+    for i in builtin_range(vars.customers): 
+        model.add(if_then(
+            customer_assigs[i,1] == 1,first_cust[i] == 1
+        ))
+        model.add(if_then(
+            customer_assigs[i,1] != 1,first_cust[i] == 0 
+        ))
+
         for j in builtin_range(vars.customers):
             if i!=j:
                 distExpr.append(times(trans_mat[i,j],vars.distance_matrix[i,j]))
-    model.minimize(sum(distExpr))
-    model.set_parameters(CpoParameters(SolutionLimit=3))
+    # model.minimize(sum([sum(distExpr),scal_prod(first_cust,depot_distances),scal_prod(last_cust,depot_distances)]))
+    model.set_parameters(CpoParameters(LogVerbosity="Terse",SolutionLimit=2))
+    
     solution : CpoSolveResult = model.solve()
     if not solution.is_solution():
         return 
