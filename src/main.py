@@ -33,7 +33,7 @@ class VRP:
     depot_location : tuple
     positions : np.ndarray
 
-def read_input(fl : str):
+def read_input(fl : Path):
     with open(fl,"r") as f:
         lines = f.readlines()
     lines = [i.split() for i in lines]
@@ -49,20 +49,31 @@ def read_input(fl : str):
 def main(args):
     set_context()
     input_file = Path(args.input_file)
-    filename = input_file.name
-    vars =  read_input(filename)
+    vars =  read_input(input_file)
     solve(vars)
 
-def solve(vars):
+def solve(vars : VRP):
     model = CpoModel()
     customer_assigs = []
     for c in range(0,vars.customers):
         customer_assigs.append(
-          [integer_var(1,vars.)]
+          [integer_var(1,vars.vehicles),integer_var(1,vars.customers)]
         )
-    customer_assigs = np.array(customer_assigs)
+    customer_assigs = np.array([np.array(i) for i in customer_assigs])
     #Ordering is unique
+    for i in range(0,len(customer_assigs)):
+        for j in range(0,len(customer_assigs)):
+            if i!=j:
+                model.add(if_then(customer_assigs[i,0] == customer_assigs[j,0],
+            customer_assigs[i,1] != customer_assigs[j,1]))
+    truck_capacities  =[[] for i in range(vars.vehicles)] # List of Lists 
 
+    for c in range(0,len(customer_assigs)):
+        for t in range(1,vars.vehicles+1):
+           truck_capacities[t-1].append(times(count([customer_assigs[c,0]],t),vars.demand[c]))
+    for vehicle_demand in truck_capacities:
+        model.add(sum(vehicle_demand) <= vars.capacity)
+    model.solve()
 
 
 
