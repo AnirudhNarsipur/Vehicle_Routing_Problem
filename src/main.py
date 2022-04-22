@@ -71,42 +71,31 @@ def main(args):
 
 def solve(vars : VRP):
     model = CpoModel()
-    customer_assigs = []
-    for c in builtin_range(0,vars.customers):
-        customer_assigs.append(
-          [integer_var(1,vars.vehicles),integer_var(1,vars.customers)]
-        )
-    customer_assigs = np.array([np.array(i) for i in customer_assigs])
-    #Ordering is unique
-    for i in builtin_range(0,vars.customers):
-        for j in builtin_range(0,vars.customers):
-            if i!=j:
-                model.add(if_then(customer_assigs[i,0] == customer_assigs[j,0],
-            customer_assigs[i,1] != customer_assigs[j,1]))
-    truck_capacities  =[[] for i in builtin_range(vars.vehicles)] # List of Lists 
-    for c in builtin_range(0,len(customer_assigs)):
-        for t in builtin_range(1,vars.vehicles+1):
-           truck_capacities[t-1].append(times(count([customer_assigs[c,0]],t),vars.demand[c]))
-    for vehicle_demand in truck_capacities:
-        model.add(sum(vehicle_demand) <= vars.capacity)
-    #Got to be consecutive
-    for t in builtin_range(1,vars.vehicles+1):
-        customers_per_truck = count(customer_assigs[:,0].ravel().tolist(),t)
-        for c in builtin_range(vars.customers):
-            model.add(if_then(
-                customer_assigs[c,0] == t,
-                customer_assigs[c,1] <= customers_per_truck
-            ))
+    truck_assigs = []
+    for i in builtin_range(vars.vehicles):
+        truck_assigs.append([binary_var() for i in builtin_range(vars.customers)])
+    truck_assigs = np.array([np.array(i) for i in truck_assigs])
+    for i in builtin_range(vars.vehicles):
+        model.add(scal_prod(truck_assigs[i].tolist() ,vars.demand) <= vars.capacity)
+    for i in builtin_range(vars.customers):
+        model.add(sum(truck_assigs[:,i].tolist()) == 1)
     model.set_parameters(CpoParameters(LogVerbosity="Terse"))
     solution : CpoSolveResult = model.solve()
     if not solution.is_solution():
         return 
-    sol_routes = np.zeros((vars.vehicles,vars.customers))
-    
-    for c in range(vars.customers):
-        t,n = solution[customer_assigs[c,0]],solution[customer_assigs[c,1]]
-        sol_routes[t-1,n] = c + 1
-    s  = get_stdout(vars,sol_routes.astype(int),solution.is_solution_optimal())
+    sol_routes = []
+    for t in builtin_range(vars.vehicles):
+        tmp =[]
+        for c in builtin_range(vars.customers):
+            if solution[truck_assigs[t,c]] == 1:
+                tmp.append(c)
+        sol_routes.append(tmp)
+    sol = np.zeros((vars.vehicles,vars.customers))
+    for t in builtin_range(vars.vehicles):
+        for c in builtin_range(vars.customers):
+            if c < len(sol_routes[t]):
+                sol[t,c] = sol_routes[t][c] + 1
+    s  = get_stdout(vars,sol.astype(int),solution.is_solution_optimal())
     write_sol(s,"test.vrp")
 
 def write_sol(s : Solution,fl):
@@ -122,7 +111,7 @@ def get_stdout(vars :VRP,sol_routes,opt):
     obj = 0
     all_routes = []
     for i in builtin_range(sol_routes.shape[0]):
-        route = []
+        route = [0]
         for j in builtin_range(sol_routes.shape[1]):
             route.append(sol_routes[i,j])
             if j==0:
