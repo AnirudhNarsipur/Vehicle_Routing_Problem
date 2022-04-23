@@ -8,9 +8,12 @@ import numpy as np
 from docplex.cp.config import context
 from docplex.cp.config import *
 from docplex.cp.model import *
-
+import z3
 
 def set_context():
+    '''
+    Sets up CPLEX 
+    '''
     if not("CP_SOLVER_EXEC" in os.environ):
         solver_exec = Path("src/bin/cpoptimizer")
     else:
@@ -27,6 +30,9 @@ parser.add_argument("input_file", type=str)
 
 @dataclass()
 class VRP:
+    '''
+    Represents VRP internally
+    '''
     customers : int
     vehicles : int
     capacity : int
@@ -67,7 +73,40 @@ def main(args):
     set_context()
     input_file = Path(args.input_file)
     vars =  read_input(input_file)
-    solve(vars)
+    solve_smt(vars)
+
+def solve_smt(vars : VRP):
+    model = z3.Solver()
+    
+    truck_assigs = np.array([np.array([z3.Int(f"var_{i}_{j}") for j in builtin_range(vars.customers)]) for i in builtin_range(vars.vehicles)])
+    for i in builtin_range(vars.vehicles):
+        for j in builtin_range(vars.customers):
+            model.add(truck_assigs[i,j] >= 0,truck_assigs[i,j] <= 1)
+    for i in builtin_range(vars.vehicles):
+        model.add(z3.Sum([vars.demand[j]*truck_assigs[i][j] for j in builtin_range(vars.customers)]) <= vars.capacity)
+    for i in builtin_range(vars.customers):
+        model.add(z3.Sum(truck_assigs[:,i].tolist()) == 1)
+    res = model.check()
+    if res == z3.unsat:
+        print("unsat!")
+    else:
+        solution = model.model()
+        # print(f"solution is {bool(solution[truck_assigs[0,0]])}")
+        sol_routes = []
+        for t in builtin_range(vars.vehicles):
+            tmp =[]
+            for c in builtin_range(vars.customers):
+                if bool(solution[truck_assigs[t,c]]) == 1:
+                    tmp.append(c)
+            sol_routes.append(tmp)
+        sol = np.zeros((vars.vehicles,vars.customers))
+        for t in builtin_range(vars.vehicles):
+            for c in builtin_range(vars.customers):
+                if c < len(sol_routes[t]):
+                    sol[t,c] = sol_routes[t][c] + 1
+        s  = get_stdout(vars,sol.astype(int),0)
+        write_sol(s,"test.vrp")
+    
 
 def solve(vars : VRP):
     model = CpoModel()
@@ -75,6 +114,7 @@ def solve(vars : VRP):
     for i in builtin_range(vars.vehicles):
         truck_assigs.append([binary_var() for i in builtin_range(vars.customers)])
     truck_assigs = np.array([np.array(i) for i in truck_assigs])
+
     for i in builtin_range(vars.vehicles):
         model.add(scal_prod(truck_assigs[i].tolist() ,vars.demand) <= vars.capacity)
     for i in builtin_range(vars.customers):
@@ -97,6 +137,7 @@ def solve(vars : VRP):
                 sol[t,c] = sol_routes[t][c] + 1
     s  = get_stdout(vars,sol.astype(int),solution.is_solution_optimal())
     write_sol(s,"test.vrp")
+
 
 def write_sol(s : Solution,fl):
     with open(fl,"w") as f:
