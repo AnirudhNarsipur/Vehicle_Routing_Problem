@@ -8,7 +8,6 @@ import numpy as np
 from docplex.cp.config import context
 from docplex.cp.config import *
 from docplex.cp.model import *
-import z3
 
 def set_context():
     '''
@@ -73,9 +72,9 @@ def main(args):
     set_context()
     input_file = Path(args.input_file)
     vars =  read_input(input_file)
-    solve(vars)
+    solve(vars,input_file)
 
-def solve(vars : VRP):
+def solve(vars : VRP,inp):
     model = CpoModel()
     truck_assigs = []
     for i in builtin_range(vars.vehicles):
@@ -103,9 +102,11 @@ def solve(vars : VRP):
             if c < len(sol_routes[t]):
                 sol[t,c] = sol_routes[t][c] + 1
     s  = get_stdout(vars,sol.astype(int),solution.is_solution_optimal())
+    print_sol(s,solution.get_solve_time(),inp)
     write_sol(s,"test.vrp")
-
-
+def print_sol(s : Solution,time,inp :Path):
+    dct = {"Instance" :os.path.basename(inp),"Time":time,"Result":s.objective,"Solution": " ".join([" ".join([str(j) for j in i]) for i in s.routes]) }
+    print(json.dumps(dct))
 def write_sol(s : Solution,fl):
     with open(fl,"w") as f:
         f.write(f"{s.objective} {0} \n")
