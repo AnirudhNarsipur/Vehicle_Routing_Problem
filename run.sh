@@ -11,9 +11,5 @@ then
 fi
 	
 input=$1
-
-# change this for your own installations!
-export CP_SOLVER_EXEC=/Applications/CPLEX_Studio129/cpoptimizer/bin/x86-64_osx/cpoptimizer
-
 # run the solver
-python3.9 src/main.py $input
+julia src/search.jl $input
