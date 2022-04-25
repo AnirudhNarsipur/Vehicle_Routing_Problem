@@ -24,6 +24,16 @@ mutable struct Solution
     routes::Vector{Route}
     objective::Number
 end
+
+abstract type Option end
+# Return a value
+struct Some{T} <: Option
+    value::T
+end
+# None - silent positive
+struct None <: Option end
+#Bad - failure
+struct Bad <: Option end
 # Write the above python function into julia
 function euc_dist(a::Vector, b::Vector)
     sqrt(sum((a - b) .^ 2))
@@ -86,7 +96,6 @@ end
 function slvr(fl::String)
     vrp = read_input(fl)
     model = Model(HiGHS.Optimizer)
-
     C = 1:vrp.customers
     V = 1:vrp.vehicles
     mtrx = @variable(model, x[V, C], binary = true)
@@ -124,7 +133,7 @@ function read_test_vrp(fl :: String,vars::VRP)
         push!(route_obj, Route(resize!(route, vars.customers), ln, load))
     end
     sol = Solution(route_obj, objective)
-    recalc_obj_val(sol, vars)
+    sol.objective = recalc_obj_val(sol, vars)
     sol
 end
 
@@ -140,10 +149,7 @@ function route_distance(route::Route, vars::VRP)
     distances
 end
 function recalc_obj_val(sol::Solution, vars::VRP)
-    distances = sum(map(r -> route_distance(r, vars), sol.routes))
-    println("distance is  now ", distances)
-    sol.objective = distances
-    nothing
+    sum(map(r -> route_distance(r, vars), sol.routes))
 end
 
 #  1. take route[1] to route[i-1] and add them in order to new_route
@@ -178,7 +184,7 @@ function sol2Opt(sol::Solution, vars::VRP)
     for route in sol.routes
         complete2optSwap(route, vars)
     end
-    recalc_obj_val(sol, vars)
+    sol.objective  = recalc_obj_val(sol, vars)
 end
 
 
@@ -209,7 +215,7 @@ function findCloc(sol::Solution, customer::Number)
     end
     error("Could not find customer!")
 end
-function swapNodes(sol::Solution, frloc::Number, fposloc::Number, srloc::Number, sposloc::Number, vars::VRP)
+function swapNodes(sol::Solution,vars::VRP, frloc::Number, fposloc::Number, srloc::Number, sposloc::Number)
     fdemand = vars.demand[sol.routes[frloc].seq[fposloc]]
     sdemand = vars.demand[sol.routes[srloc].seq[sposloc]]
     sol.routes[frloc].load = sol.routes[frloc].load - fdemand + sdemand
@@ -217,9 +223,6 @@ function swapNodes(sol::Solution, frloc::Number, fposloc::Number, srloc::Number,
     tmp = sol.routes[frloc].seq[fposloc]
     sol.routes[frloc].seq[fposloc] = sol.routes[srloc].seq[sposloc]
     sol.routes[srloc].seq[sposloc] = tmp
-    # 2optSwap :(
-    # complete2optSwap(sol.routes[frloc],vars)
-    # complete2optSwap(sol.routes[srloc],vars)
 end
 function calc_route_load(route::Route, vars::VRP)
     d = 0
@@ -231,14 +234,13 @@ function calc_route_load(route::Route, vars::VRP)
     end
     d
 end
-function checkSwapNodes(sol::Solution, vars::VRP)::Bool
+function checkSwapNodes(sol::Solution, vars::VRP)
     first, second = rand(1:vars.customers, 2)
     if first == second
         return false
     end
     frloc, fposloc = findCloc(sol, first)
     srloc, sposloc = findCloc(sol, second)
-
     fdemand = vars.demand[first]
     sdemand = vars.demand[second]
     if frloc == srloc
@@ -247,53 +249,62 @@ function checkSwapNodes(sol::Solution, vars::VRP)::Bool
     if (sol.routes[frloc].load - fdemand + sdemand) > vars.capacity || (sol.routes[srloc].load - sdemand + fdemand) > vars.capacity
         return false
     end
-    olddistance = route_distance(sol.routes[frloc], vars) + route_distance(sol.routes[srloc], vars)
-    swapNodes(sol, frloc, fposloc, srloc, sposloc, vars)
-    newdistance = route_distance(sol.routes[frloc], vars) + route_distance(sol.routes[srloc], vars)
-    if newdistance > olddistance || calc_route_load(sol.routes[frloc], vars) > vars.capacity || calc_route_load(sol.routes[srloc], vars) > vars.capacity
-        swapNodes(sol, frloc, fposloc, srloc, sposloc, vars)
-        return false
-    else
-        return true
-    end
+    swapNodes(sol,vars, frloc, fposloc, srloc, sposloc)
+    newdistance = recalc_obj_val(sol,vars)
+    swapNodes(sol, vars,frloc, fposloc, srloc, sposloc)
+    # @assert sol.routes[frloc].seq[fposloc] == first
+    # @assert sol.routes[srloc].seq[sposloc] == second
+    return newdistance,frloc,fposloc,srloc,sposloc
 end
 
 function localSearch(sol::Solution, vars::VRP)
-    n = 0
-    t = 1000000
+    b = 0
+    w = 0
+    t =  1e+6
+    sol.objective = recalc_obj_val(sol,vars)
+    T = 10
+    n=1
+    mx = vars.customers * (vars.customers-1)/2
+    best_sol = deepcopy(sol)
+    prob_func = (ns) -> exp((best_sol.objective-ns)/T)
     for i = 1:t
+        n+=1
+        if n > mx
+            n = 1
+            T*=0.95
+        end
         res = checkSwapNodes(sol, vars)
-        if res
-            n += 1
+        if res isa Bool
+            continue
+        else
+            nscore = res[1]
+            f1,f2,s1,s2 = res[2:end]
+            if nscore < best_sol.objective
+                swapNodes(sol,vars,f1,f2,s1,s2)
+                sol.objective = nscore
+                best_sol=sol
+                b+=1
+            elseif rand() <= prob_func(nscore)
+                best_sol = deepcopy(sol)
+                sol.objective = nscore
+                swapNodes(sol,vars,f1,f2,s1,s2)
+                w+=1
+            end
         end
     end
-    println("Made " * string(n) * " out of " * string(t) * " swaps")
+    sol = best_sol
+    println("Made " * string(b) * " better swaps " * string(w) * " worse swaps out of " * string(t) * " swaps")
 end
-# function getNeighbs(vars :: VRP,customer :: Number,wiggle :: Number)
-#     csortloc = vars.node_pos[customer]
-#     ls = []
-#     can_add = true
-#     index = csortloc+1
-#     while can_add == true && index <= vars.customers
-#         if vars.node_demand[index][1] <= csortloc + wiggle
-#             push!(vars.node_demand[index][2])
-#         else
-#             can_add = false
-#         end
-#     end
-
-# end
-# function routeSwap(customer :: Number,sol :: Solution,vars :: VRP)
-#     routeloc,posloc = findCloc(sol,customer)
-#     posNodes = getNeighbs(vars,customer,vars.capacity - sol.routes[routeloc].load)
-# end
 function mn()
-    fl = "input/16_5_1.vrp"
+    fl = "input/135_7_1.vrp"
     vars = read_input(fl)
     sol = read_test_vrp(fl, vars)
     sol2Opt(sol, vars)
+    println("Distance before local search " * string(sol.objective))
     localSearch(sol, vars)
     sol2Opt(sol, vars)
-    recalc_obj_val(sol, vars)
+    sol.objective = recalc_obj_val(sol, vars)
+    println("Distance after local search " * string(sol.objective))
+
     vis_output(sol, vars)
 end
