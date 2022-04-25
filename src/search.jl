@@ -197,14 +197,17 @@ function swapNodes(sol :: Solution,frloc :: Number,fposloc :: Number,srloc :: Nu
     tmp = sol.routes[frloc].seq[fposloc]
     sol.routes[frloc].seq[fposloc] = sol.routes[srloc].seq[sposloc]
     sol.routes[srloc].seq[sposloc] = tmp
-    complete2optSwap(sol.routes[frloc],vars)
-    complete2optSwap(sol.routes[srloc],vars)
-   
+    # 2optSwap :(
+    # complete2optSwap(sol.routes[frloc],vars)
+    # complete2optSwap(sol.routes[srloc],vars)
 end
 function calc_route_load(route :: Route,vars :: VRP)
     d = 0 
     for i=1:route.seqlen
         d+=vars.demand[route.seq[i]]
+    end
+    if d > vars.capacity
+        error("Demand exceeded")
     end
     d
 end
@@ -215,6 +218,7 @@ function checkSwapNodes(sol :: Solution , vars :: VRP) :: Bool
     end
     frloc,fposloc = findCloc(sol,first)
     srloc,sposloc = findCloc(sol,second)
+
     fdemand = vars.demand[first]
     sdemand = vars.demand[second]
     if frloc==srloc
@@ -236,7 +240,7 @@ end
 
 function localSearch(sol :: Solution,vars :: VRP)
     n = 0
-    t = 100000
+    t = 1000000
     for i=1:t
         res = checkSwapNodes(sol,vars)
         if res
@@ -263,12 +267,12 @@ end
 #     routeloc,posloc = findCloc(sol,customer)
 #     posNodes = getNeighbs(vars,customer,vars.capacity - sol.routes[routeloc].load)
 # end
-
 function mn()
-    vars = read_input("input/21_4_1.vrp")
+    vars = read_input("input/386_47_1.vrp")
     sol =  read_test_vrp("test.vrp",vars)
     sol2Opt(sol,vars)
     localSearch(sol,vars)
+    sol2Opt(sol,vars)
     recalc_obj_val(sol,vars)
     vis_output(sol,vars)
 end
