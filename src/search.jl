@@ -7,6 +7,10 @@ struct VRP
     positions::Vector
     distance_m::Matrix
     depot_distance::Vector
+    # Node -> Position in node_pos
+    node_pos :: Dict{Number,Number}
+    # demand, customer node number 
+    node_demand :: Vector{Tuple{Number,Number}}
 end
 mutable struct Route
     seq :: Vector{Number}
@@ -41,6 +45,15 @@ function depot_distance(positions :: Vector, depot_pos :: Vector)
     end
     depot_m
 end
+function getSortedDemand(demand :: Vector)
+    demand_index = map(i -> (i,demand[i]),1:length(demand))
+    sort!(demand_index)
+    node_dict = Dict()
+    for (index,elem) in enumerate(demand_index)
+        node_dict[elem[1]] = index
+    end
+    return node_dict,demand_index
+end
 
 function read_input(fl::String)
     try
@@ -58,7 +71,10 @@ function read_input(fl::String)
                 push!(demand, parse(Float64, lines[i][1]))
                 push!(positions, [floor(parse(Float64, lines[i][j])) for j = 2:3])
             end
-            VRP(customers-1,vehicles,capacity,demand,depot_location,positions,create_distance_matrix(positions),depot_distance(positions,depot_location))
+            node_pos, node_demand = getSortedDemand(demand)
+            VRP(customers-1,vehicles,capacity,demand,depot_location,
+            positions,create_distance_matrix(positions),depot_distance(positions,depot_location),
+            node_pos,node_demand)
         end
     catch 
         error("could not read file!")
@@ -163,11 +179,96 @@ function vis_output(sol :: Solution, vars :: VRP)
         end
     end
 end            
+function findCloc(sol :: Solution,customer :: Number)
+    for (i,route) in enumerate(sol.routes)
+        for j=1:route.seqlen
+            if route.seq[j] == customer
+                return (i,j)
+            end
+        end
+    end
+    error("Could not find customer!")
+end
+function swapNodes(sol :: Solution,frloc :: Number,fposloc :: Number,srloc :: Number,sposloc :: Number,vars::VRP)
+    fdemand = vars.demand[sol.routes[frloc].seq[fposloc]]
+    sdemand = vars.demand[sol.routes[srloc].seq[sposloc]]
+    sol.routes[frloc].load = sol.routes[frloc].load - fdemand + sdemand
+    sol.routes[srloc].load = sol.routes[srloc].load - sdemand + fdemand
+    tmp = sol.routes[frloc].seq[fposloc]
+    sol.routes[frloc].seq[fposloc] = sol.routes[srloc].seq[sposloc]
+    sol.routes[srloc].seq[sposloc] = tmp
+    complete2optSwap(sol.routes[frloc],vars)
+    complete2optSwap(sol.routes[srloc],vars)
+   
+end
+function calc_route_load(route :: Route,vars :: VRP)
+    d = 0 
+    for i=1:route.seqlen
+        d+=vars.demand[route.seq[i]]
+    end
+    d
+end
+function checkSwapNodes(sol :: Solution , vars :: VRP) :: Bool
+    first,second = rand(1:vars.customers,2)
+    if first==second
+        return false
+    end
+    frloc,fposloc = findCloc(sol,first)
+    srloc,sposloc = findCloc(sol,second)
+    fdemand = vars.demand[first]
+    sdemand = vars.demand[second]
+    if frloc==srloc
+        return false
+    end
+    if (sol.routes[frloc].load - fdemand + sdemand) > vars.capacity || (sol.routes[srloc].load - sdemand + fdemand) > vars.capacity
+        return false
+    end
+    olddistance = route_distance(sol.routes[frloc],vars) + route_distance(sol.routes[srloc],vars)
+    swapNodes(sol,frloc,fposloc,srloc,sposloc,vars)
+    newdistance = route_distance(sol.routes[frloc],vars) + route_distance(sol.routes[srloc],vars)
+    if newdistance > olddistance || calc_route_load(sol.routes[frloc],vars) > vars.capacity ||  calc_route_load(sol.routes[srloc],vars) > vars.capacity
+        swapNodes(sol,frloc,fposloc,srloc,sposloc,vars)
+        return false
+    else
+        return true
+    end
+end
+
+function localSearch(sol :: Solution,vars :: VRP)
+    n = 0
+    t = 100000
+    for i=1:t
+        res = checkSwapNodes(sol,vars)
+        if res
+            n+=1
+        end
+    end
+    println("Made " * string(n) * " out of " * string(t) * " swaps")
+end
+# function getNeighbs(vars :: VRP,customer :: Number,wiggle :: Number)
+#     csortloc = vars.node_pos[customer]
+#     ls = []
+#     can_add = true
+#     index = csortloc+1
+#     while can_add == true && index <= vars.customers
+#         if vars.node_demand[index][1] <= csortloc + wiggle
+#             push!(vars.node_demand[index][2])
+#         else
+#             can_add = false
+#         end
+#     end
+    
+# end
+# function routeSwap(customer :: Number,sol :: Solution,vars :: VRP)
+#     routeloc,posloc = findCloc(sol,customer)
+#     posNodes = getNeighbs(vars,customer,vars.capacity - sol.routes[routeloc].load)
+# end
 
 function mn()
     vars = read_input("input/21_4_1.vrp")
     sol =  read_test_vrp("test.vrp",vars)
-    recalc_obj_val(sol,vars)
     sol2Opt(sol,vars)
+    localSearch(sol,vars)
+    recalc_obj_val(sol,vars)
     vis_output(sol,vars)
 end
