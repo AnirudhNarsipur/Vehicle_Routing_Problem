@@ -1,6 +1,5 @@
 include("./datastructs.jl")
 include("./utils.jl")
-
 function depot_distance(positions::Vector, depot_pos::Vector)
     c = length(positions)
     depot_m = zeros(c)
@@ -45,7 +44,7 @@ function read_input(fl::String)
     end
 end
 
-function slvr(fl::String)
+function lpSolver(fl::String)
     vrp = read_input(fl)
     model = Model(HiGHS.Optimizer)
     C = 1:vrp.customers
@@ -62,9 +61,9 @@ function slvr(fl::String)
     end
     lpvals
 end
-function read_test_vrp(fl::String, vars::VRP)
+function getInitialSol(fl::String, vars::VRP)
     objective = 0
-    route_mtx = slvr(fl)
+    route_mtx = lpSolver(fl)
     routes = []
     for i = 1:vars.vehicles
         ls = []
@@ -89,3 +88,69 @@ function read_test_vrp(fl::String, vars::VRP)
     sol
 end
 
+function read_goog_vrp(fl::String,vars :: VRP)
+    try 
+        open(fl, "r") do io
+            lines = readlines(io)
+            lines = [split(i) for i in lines]
+            objective = parse(Float64, lines[1][1])
+            # println("i is ",lines[2][2:end-1]," length ",length(lines[2][2:end-1]))
+            routes =  [map(x -> parse(Int64,x),i[2:end-1]) for i in lines[2:end]]
+            # println("routes are ",routes)
+            route_obj = []
+            for route in routes
+                load = 0
+                for cust in route
+                    load+=vars.demand[cust]
+                end
+                ln = length(route)
+                push!(route_obj,Route(resize!(route,vars.customers),ln,load))
+            end
+            sol = Solution(route_obj,objective)
+            recalc_obj_val(sol,vars)
+            sol
+        end
+    catch
+        error("could not read test vrp file")
+    end
+end 
+
+function get_output(fl :: String,time,sol :: Solution,vars::VRP)
+    kv_json = (k,v) -> join(['"',k,"""": """,'"',v,'"'])
+    solo = []
+    for route in sol.routes
+        push!(solo,"0")
+        for i=1:route.seqlen
+            push!(solo,string(route.seq[i]))
+        end
+        push!(solo,"0")
+    end
+    out = join([
+        "{",
+        #TODO : Change to filename
+        kv_json("Instance",basename(fl)),",",
+        kv_json("Time",round(time,digits=2)),",",
+        kv_json("Result",string(round(sol.objective,digits=2))) ,",",
+        kv_json("Solution",join(solo," ")),
+        "}"
+    ])
+    println(out)
+end
+
+function vis_output(sol::Solution, vars::VRP)
+    lines = [string(sol.objective) * " 0"]
+    for route in sol.routes
+        out = "0"
+        for i = 1:route.seqlen
+            out *= " "
+            out *= string(route.seq[i])
+        end
+        out *= " 0"
+        push!(lines, out)
+    end
+    open("vistest.vrp", "w") do io
+        for line in lines
+            write(io, line * "\n")
+        end
+    end
+end
