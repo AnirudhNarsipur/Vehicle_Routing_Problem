@@ -1,5 +1,6 @@
 include("./datastructs.jl")
 include("./utils.jl")
+
 function depot_distance(positions::Vector, depot_pos::Vector)
     c = length(positions)
     depot_m = zeros(c)
@@ -44,49 +45,7 @@ function read_input(fl::String)
     end
 end
 
-function lpSolver(fl::String)
-    vrp = read_input(fl)
-    model = Model(HiGHS.Optimizer)
-    C = 1:vrp.customers
-    V = 1:vrp.vehicles
-    mtrx = @variable(model, x[V, C], binary = true)
-    @constraint(model, [c in C], sum(x[:, c]) == 1)
-    @constraint(model, [v in V], sum(x[v, :] .* vrp.demand) <= vrp.capacity)
-    optimize!(model)
-    lpvals = zeros(vrp.vehicles, vrp.customers)
-    for i = 1:vrp.vehicles
-        for j = 1:vrp.customers
-            lpvals[i, j] = value(mtrx[i, j])
-        end
-    end
-    lpvals
-end
-function getInitialSol(fl::String, vars::VRP)
-    objective = 0
-    route_mtx = lpSolver(fl)
-    routes = []
-    for i = 1:vars.vehicles
-        ls = []
-        for j = 1:vars.customers
-            if route_mtx[i, j] == 1
-                push!(ls, j)
-            end
-        end
-        push!(routes, ls)
-    end
-    route_obj = []
-    for route in routes
-        load = 0
-        for cust in route
-            load += vars.demand[cust]
-        end
-        ln = length(route)
-        push!(route_obj, Route(resize!(route, vars.customers), ln, load))
-    end
-    sol = Solution(route_obj, objective)
-    sol.objective = recalc_obj_val(sol, vars)
-    sol
-end
+
 
 function read_goog_vrp(fl::String,vars :: VRP)
     try 
