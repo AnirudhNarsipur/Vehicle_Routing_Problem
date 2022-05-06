@@ -1,4 +1,5 @@
 # module TRP
+using StatsBase
 include("./parseInput.jl")
 using JuMP
 import HiGHS
@@ -143,7 +144,11 @@ function checkSol(sol::Solution, vars::VRP)
 end
 
 function localSearch(sol::Solution, vars::VRP)
-    numItr = 1e+5
+
+    b = 0
+    w = 0
+    t = 1e+4 * vars.customers
+
     sol.objective = recalc_obj_val(sol, vars)
     init = sol.objective
     temperature = 1000
@@ -163,24 +168,33 @@ function localSearch(sol::Solution, vars::VRP)
         incapacity, nscore, changeFunc = randomNodeSwap(sol, vars)
         if nscore < best_sol.objective
             changeFunc()
-            if checkSol(sol, vars)
-                best_sol = deepcopy(sol)
-            end
+
+            best_sol = deepcopy(sol)
+            b += 1
+
         elseif rand() <= prob_func(nscore)
             changeFunc()
         end
     end
-    checkSol(best_sol, vars)
-    sol = best_sol
-    sol2Opt(sol, vars)
-    sol.objective = recalc_obj_val(sol, vars)
-    fn = sol.objective
-    if fn > init
-        println("final ", fn, " is worse than init ", init)
-    end
+
+    sol.objective = recalc_obj_val(sol,vars)
+    newsol = deepcopy(best_sol)
+    newsol
 end
 
-function nn_heur(vars::VRP)::Solution
+# function localSearch(sol :: Solution, vars :: VRP)
+#     t = 1e+4 * vars.customers
+#     sol.objective = recalc_obj_val(sol, vars)
+#     for _ = 1:t
+#         nscore, changeFunc = randomNodeSwap(sol, vars)
+#         if nscore < sol.objective
+#             changeFunc()
+#         end
+#     end
+#     nothing
+# end
+function nn_heur(vars :: VRP)
+
     groups = []
     cust = [1:vars.customers...]
     while length(cust) != 0
@@ -227,8 +241,18 @@ function nn_method(vars::VRP, l::Bool)
     end
     sol
 end
-function lpSolver(vrp::VRP, obj::Bool)
-    nnMat = nn_to_lpmatrix(vrp)
+
+function get_customer_routes(sol :: Solution)
+    c_r = Dict{Number,Number}()
+    for i = 1:length(sol.routes)
+        for j=1:sol.routes[i].seqlen
+            c_r[sol.routes[i].seq[j]] =  i 
+        end
+    end
+    c_r
+end
+function destroy_tsp(sol:: Solution, vrp :: VRP)
+    remove_c = sample(1:vrp.customers,Int(round(0.75*vrp.customers)),replace=false)
     model = Model(HiGHS.Optimizer)
     set_silent(model)
     C = 1:vrp.customers
@@ -236,9 +260,21 @@ function lpSolver(vrp::VRP, obj::Bool)
     mtrx = @variable(model, x[V, C], binary = true)
     @constraint(model, [c in C], sum(x[:, c]) == 1)
     @constraint(model, [v in V], sum(x[v, :] .* vrp.demand) <= vrp.capacity)
-    if obj
-        @objective(model, Min, sum((mtrx - nnMat)))
+    cust_routes = get_customer_routes(sol)
+    remove_mat = zeros(vrp.vehicles,vrp.customers)
+    min_expr = @expression(model,0)
+    for c in C
+        curr_route = cust_routes[c]
+        if !(c in remove_c)
+            
+            @constraint(model,  x[curr_route,c] == 1)
+        else
+            min_expr += @expression(model,x[curr_route,c])
+        end
     end
+    # bad_cust_r = cust_routes[remove_c[1]]
+    # @constraint(model,x[bad_cust_r,remove_c[1]] == 0)
+    @objective(model,Min,min_expr)
     optimize!(model)
     lpvals = zeros(vrp.vehicles, vrp.customers)
     for i = 1:vrp.vehicles
@@ -246,58 +282,37 @@ function lpSolver(vrp::VRP, obj::Bool)
             lpvals[i, j] = value(mtrx[i, j])
         end
     end
-    lpvals
+    println("available sols : ",result_count(model))
+    nsol = solverToSol(vrp,lpvals)
+    sol2Opt(nsol,vrp)
+    lnsol = localSearch(nsol,vrp)
+    sol2Opt(lnsol,vrp)
+    lnsol
 end
-function getInitialSol(vars::VRP, obj)
-    objective = 0
-    route_mtx = lpSolver(vars, obj)
-    routes = []
-    for i = 1:vars.vehicles
-        ls = []
-        for j = 1:vars.customers
-            if route_mtx[i, j] == 1
-                push!(ls, j)
-            end
+function initStuff(fl :: String) 
+    vars = read_input(fl)
+    sol = getInitialSol(vars)
+    sol2Opt(sol, vars)
+    numRuns = 1
+    for i = 1:numRuns
+        tmp = deepcopy(sol)
+        localSearch(tmp, vars)
+        sol2Opt(tmp, vars)
+        tmp.objective = recalc_obj_val(tmp, vars)
+        if tmp.objective < sol.objective
+            sol = tmp
         end
-        push!(routes, ls)
     end
-    route_obj = []
-    for route in routes
-        load = 0
-        for cust in route
-            load += vars.demand[cust]
-        end
-        ln = length(route)
-        push!(route_obj, Route(resize!(route, vars.customers), ln, load))
-    end
-    sol = Solution(route_obj, objective)
-    sol.objective = recalc_obj_val(sol, vars)
-    sol
+    vars,sol
 end
-function mn(fl::String, obj)
+    
+function mn(fl::String)
     start_time = Base.Libc.time()
     vars = read_input(fl)
-    sol = getInitialSol(vars, obj)
+    sol = getInitialSol(vars)
     sol2Opt(sol, vars)
     org_d = sol.objective
-    numRuns = 1
-    tmp = deepcopy(sol)
-    localSearch(tmp, vars)
-    if tmp.objective < sol.objective
-        sol = tmp
-    end
-    f_d = sol.objective
-    end_time = Base.Libc.time()
-    println("initial obj is ", org_d, " final is ", f_d, " improv is ", round(((org_d - f_d) / org_d) * 100, digits=2), "%")
-    vis_output(sol, vars)
-    get_output(fl, end_time - start_time, sol, vars)
-end
-
-function nn_mn(fl::String)
-    start_time = Base.Libc.time()
-    vars = read_input(fl)
-    sol = nn_method(vars, false)
-    numRuns = 5
+    numRuns = 2
     for i = 1:numRuns
         tmp = nn_method(vars, false)
         if tmp.objective < sol.objective
