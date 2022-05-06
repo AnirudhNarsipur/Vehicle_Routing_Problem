@@ -1,5 +1,6 @@
 include("./datastructs.jl")
 include("./utils.jl")
+
 function depot_distance(positions::Vector, depot_pos::Vector)
     c = length(positions)
     depot_m = zeros(c)
