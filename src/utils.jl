@@ -31,3 +31,29 @@ function create_distance_matrix(positions::Vector)
     end
     dist_m
 end
+"""
+Given a solution and a customer
+return (routenumber,number in route)
+"""
+function findCloc(sol::Solution, customer::Number)
+    for (i, route) in enumerate(sol.routes)
+        for j = 1:route.seqlen
+            if route.seq[j] == customer
+                return (i, j)
+            end
+        end
+    end
+    error("Could not find customer!")
+end
+"""
+Return a dictionary of customer route assigments
+"""
+function get_customer_routes(sol :: Solution) :: Dict{Number,Number}
+    c_r = Dict{Number,Number}()
+    for i = 1:length(sol.routes)
+        for j=1:sol.routes[i].seqlen
+            c_r[sol.routes[i].seq[j]] =  i 
+        end
+    end
+    c_r
+end

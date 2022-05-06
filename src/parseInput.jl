@@ -1,7 +1,11 @@
 include("./datastructs.jl")
 include("./utils.jl")
 
+"""
+Return a  vector of distances from nodes to depot
+"""
 function depot_distance(positions::Vector, depot_pos::Vector)
+
     c = length(positions)
     depot_m = zeros(c)
     for i = 1:c
@@ -17,6 +21,15 @@ function getSortedDemand(demand::Vector)
         node_dict[elem[1]] = index
     end
     return node_dict, demand_index
+end
+function sorted_distance(dist_m::Matrix)
+    l = size(dist_m)[1]
+    sort_m = Matrix{Tuple{Number,Number}}(undef, l, l)
+    for i = 1:l
+        tmp = map(j -> (dist_m[i, j], j), 1:l)
+        sort_m[i,:] = sort(tmp,by=i->i[1])
+    end
+    sort_m
 end
 
 function read_input(fl::String)
@@ -36,16 +49,21 @@ function read_input(fl::String)
                 push!(positions, [floor(parse(Float64, lines[i][j])) for j = 2:3])
             end
             node_pos, node_demand = getSortedDemand(demand)
+            dist_m = create_distance_matrix(positions)
             VRP(customers - 1, vehicles, capacity, demand, depot_location,
-                positions, create_distance_matrix(positions), depot_distance(positions, depot_location),
-                node_pos, node_demand)
+                positions, dist_m, depot_distance(positions, depot_location),
+                node_pos, node_demand, sorted_distance(dist_m))
         end
     catch
         error("could not read file!")
     end
 end
+"""
+Get Initial feasible solution to VRP from LP solver
+Returns matrix of VxC binary values
+"""
+function lpSolver(vrp::VRP)
 
-function lpSolver(vrp :: VRP)
     model = Model(HiGHS.Optimizer)
     set_silent(model)
     C = 1:vrp.customers
@@ -60,11 +78,12 @@ function lpSolver(vrp :: VRP)
             lpvals[i, j] = value(mtrx[i, j])
         end
     end
-    println("available sols : ",result_count(model))
     lpvals
 end
-function solverToSol(vars :: VRP,route_mtx)
-    objective= 0
+"""
+Given VRP struct and LP result converts to Solution datastructure
+"""
+function solverToSol(vars::VRP, route_mtx)::Solution
     routes = []
     for i = 1:vars.vehicles
         ls = []
@@ -84,59 +103,61 @@ function solverToSol(vars :: VRP,route_mtx)
         ln = length(route)
         push!(route_obj, Route(resize!(route, vars.customers), ln, load))
     end
-    sol = Solution(route_obj, objective)
+    sol = Solution(route_obj, 0)
     sol.objective = recalc_obj_val(sol, vars)
     sol
 end
+"""
+Return a initial feasible solution
+"""
 function getInitialSol(vars::VRP)
     route_mtx = lpSolver(vars)
-    solverToSol(vars,route_mtx)
+    solverToSol(vars, route_mtx)
 end
 
-function read_goog_vrp(fl::String,vars :: VRP)
-    try 
+function read_goog_vrp(fl::String, vars::VRP)
+    try
         open(fl, "r") do io
             lines = readlines(io)
             lines = [split(i) for i in lines]
             objective = parse(Float64, lines[1][1])
             # println("i is ",lines[2][2:end-1]," length ",length(lines[2][2:end-1]))
-            routes =  [map(x -> parse(Int64,x),i[2:end-1]) for i in lines[2:end]]
+            routes = [map(x -> parse(Int64, x), i[2:end-1]) for i in lines[2:end]]
             # println("routes are ",routes)
             route_obj = []
             for route in routes
                 load = 0
                 for cust in route
-                    load+=vars.demand[cust]
+                    load += vars.demand[cust]
                 end
                 ln = length(route)
-                push!(route_obj,Route(resize!(route,vars.customers),ln,load))
+                push!(route_obj, Route(resize!(route, vars.customers), ln, load))
             end
-            sol = Solution(route_obj,objective)
-            recalc_obj_val(sol,vars)
+            sol = Solution(route_obj, objective)
+            recalc_obj_val(sol, vars)
             sol
         end
     catch
         error("could not read test vrp file")
     end
-end 
+end
 
-function get_output(fl :: String,time,sol :: Solution,vars::VRP)
-    kv_json = (k,v) -> join(['"',k,"""": """,'"',v,'"'])
+function get_output(fl::String, time, sol::Solution, vars::VRP)
+    kv_json = (k, v) -> join(['"', k, """": """, '"', v, '"'])
     solo = []
     for route in sol.routes
-        push!(solo,"0")
-        for i=1:route.seqlen
-            push!(solo,string(route.seq[i]))
+        push!(solo, "0")
+        for i = 1:route.seqlen
+            push!(solo, string(route.seq[i]))
         end
-        push!(solo,"0")
+        push!(solo, "0")
     end
     out = join([
         "{",
-        #TODO : Change to filename
-        kv_json("Instance",basename(fl)),",",
-        kv_json("Time",round(time,digits=2)),",",
-        kv_json("Result",string(round(sol.objective,digits=2))) ,",",
-        kv_json("Solution",join(solo," ")),
+        kv_json("Instance", basename(fl)), ",",
+        kv_json("Time", round(time, digits=2)), ",",
+        kv_json("Result", string(round(sol.objective, digits=2))), ",",
+        kv_json("Solution", join(solo, " ")),
         "}"
     ])
     println(out)

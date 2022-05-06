@@ -13,6 +13,7 @@ struct VRP
     node_pos::Dict{Number,Number}
     # demand, customer node number 
     node_demand::Vector{Tuple{Number,Number}}
+    sorted_d :: Matrix
 end
 mutable struct Route
     seq::Vector{Number}
