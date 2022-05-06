@@ -1,4 +1,5 @@
 # module TRP
+using StatsBase
 include("./parseInput.jl")
 """
 1. take route[1] to route[i-1] and add them in order to new_route
@@ -115,7 +116,7 @@ end
 function localSearch(sol::Solution, vars::VRP)
     b = 0
     w = 0
-    t = 1e+6
+    t = 1e+4 * vars.customers
     sol.objective = recalc_obj_val(sol, vars)
     T = 1000
     n = 1
@@ -130,18 +131,30 @@ function localSearch(sol::Solution, vars::VRP)
         end
         nscore, changeFunc = randomNodeSwap(sol, vars)
         if nscore < best_sol.objective
-            best_sol = sol
             changeFunc()
+            best_sol = deepcopy(sol)
             b += 1
         elseif rand() <= prob_func(nscore)
-            best_sol = deepcopy(sol)
             changeFunc()
             w += 1
         end
     end
-    sol = best_sol
+    sol.objective = recalc_obj_val(sol,vars)
+    newsol = deepcopy(best_sol)
+    newsol
 end
 
+# function localSearch(sol :: Solution, vars :: VRP)
+#     t = 1e+4 * vars.customers
+#     sol.objective = recalc_obj_val(sol, vars)
+#     for _ = 1:t
+#         nscore, changeFunc = randomNodeSwap(sol, vars)
+#         if nscore < sol.objective
+#             changeFunc()
+#         end
+#     end
+#     nothing
+# end
 function nn_heur(vars :: VRP)
     groups = []
     cust = [1:vars.customers...]
@@ -173,12 +186,76 @@ function nn_method(vars :: VRP)
     vis_output(sol,vars)
     sol
 end
+function get_customer_routes(sol :: Solution)
+    c_r = Dict{Number,Number}()
+    for i = 1:length(sol.routes)
+        for j=1:sol.routes[i].seqlen
+            c_r[sol.routes[i].seq[j]] =  i 
+        end
+    end
+    c_r
+end
+function destroy_tsp(sol:: Solution, vrp :: VRP)
+    remove_c = sample(1:vrp.customers,Int(round(0.75*vrp.customers)),replace=false)
+    model = Model(HiGHS.Optimizer)
+    set_silent(model)
+    C = 1:vrp.customers
+    V = 1:vrp.vehicles
+    mtrx = @variable(model, x[V, C], binary = true)
+    @constraint(model, [c in C], sum(x[:, c]) == 1)
+    @constraint(model, [v in V], sum(x[v, :] .* vrp.demand) <= vrp.capacity)
+    cust_routes = get_customer_routes(sol)
+    remove_mat = zeros(vrp.vehicles,vrp.customers)
+    min_expr = @expression(model,0)
+    for c in C
+        curr_route = cust_routes[c]
+        if !(c in remove_c)
+            
+            @constraint(model,  x[curr_route,c] == 1)
+        else
+            min_expr += @expression(model,x[curr_route,c])
+        end
+    end
+    # bad_cust_r = cust_routes[remove_c[1]]
+    # @constraint(model,x[bad_cust_r,remove_c[1]] == 0)
+    @objective(model,Min,min_expr)
+    optimize!(model)
+    lpvals = zeros(vrp.vehicles, vrp.customers)
+    for i = 1:vrp.vehicles
+        for j = 1:vrp.customers
+            lpvals[i, j] = value(mtrx[i, j])
+        end
+    end
+    println("available sols : ",result_count(model))
+    nsol = solverToSol(vrp,lpvals)
+    sol2Opt(nsol,vrp)
+    lnsol = localSearch(nsol,vrp)
+    sol2Opt(lnsol,vrp)
+    lnsol
+end
+function initStuff(fl :: String) 
+    vars = read_input(fl)
+    sol = getInitialSol(vars)
+    sol2Opt(sol, vars)
+    numRuns = 1
+    for i = 1:numRuns
+        tmp = deepcopy(sol)
+        localSearch(tmp, vars)
+        sol2Opt(tmp, vars)
+        tmp.objective = recalc_obj_val(tmp, vars)
+        if tmp.objective < sol.objective
+            sol = tmp
+        end
+    end
+    vars,sol
+end
+    
 function mn(fl::String)
     start_time = Base.Libc.time()
     vars = read_input(fl)
-    sol = getInitialSol(fl, vars)
-    org_d = sol.objective
+    sol = getInitialSol(vars)
     sol2Opt(sol, vars)
+    org_d = sol.objective
     numRuns = 2
     for i = 1:numRuns
         tmp = deepcopy(sol)

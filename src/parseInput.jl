@@ -44,9 +44,9 @@ function read_input(fl::String)
     end
 end
 
-function lpSolver(fl::String)
-    vrp = read_input(fl)
+function lpSolver(vrp :: VRP)
     model = Model(HiGHS.Optimizer)
+    set_silent(model)
     C = 1:vrp.customers
     V = 1:vrp.vehicles
     mtrx = @variable(model, x[V, C], binary = true)
@@ -59,11 +59,11 @@ function lpSolver(fl::String)
             lpvals[i, j] = value(mtrx[i, j])
         end
     end
+    println("available sols : ",result_count(model))
     lpvals
 end
-function getInitialSol(fl::String, vars::VRP)
-    objective = 0
-    route_mtx = lpSolver(fl)
+function solverToSol(vars :: VRP,route_mtx)
+    objective= 0
     routes = []
     for i = 1:vars.vehicles
         ls = []
@@ -86,6 +86,10 @@ function getInitialSol(fl::String, vars::VRP)
     sol = Solution(route_obj, objective)
     sol.objective = recalc_obj_val(sol, vars)
     sol
+end
+function getInitialSol(vars::VRP)
+    route_mtx = lpSolver(vars)
+    solverToSol(vars,route_mtx)
 end
 
 function read_goog_vrp(fl::String,vars :: VRP)
