@@ -51,7 +51,7 @@ function swapNodes(sol::Solution, vars::VRP, frloc::Number, fposloc::Number, srl
     sol.routes[srloc].seq[sposloc] = tmp
     nothing
 end
-function calc_route_load(route::Route, vars::VRP) :: Number
+function calc_route_load(route::Route, vars::VRP)::Number
     d = 0
     for i = 1:route.seqlen
         d += vars.demand[route.seq[i]]
@@ -63,19 +63,19 @@ function pointdistance(vars::VRP, sol::Solution, rloc::Number, rpos::Number)
     if sol.routes[rloc].seqlen <= 1
         route_distance(sol.routes[rloc], vars)
     elseif rpos == 1
-        vars.depot_distance[c] + vars.distance_m[c,sol.routes[rloc].seq[rpos+1]]
+        vars.depot_distance[c] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
     elseif rpos == sol.routes[rloc].seqlen
-        vars.distance_m[c,sol.routes[rloc].seq[rpos-1]] + vars.depot_distance[c]
+        vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.depot_distance[c]
     else
-        vars.distance_m[c,sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c,sol.routes[rloc].seq[rpos+1]]
+        vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
     end
 end
 function nearNodeSwap(sol::Solution, vars::VRP)
     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
     fnode = rand(1:vars.vehicles)
-    snode = vars.sorted_d[fnode,rand(2:9)][2]
-    frloc,fposloc = findCloc(sol,fnode)
-    srloc,sposloc = findCloc(sol,snode)
+    snode = vars.sorted_d[fnode, rand(2:9)][2]
+    frloc, fposloc = findCloc(sol, fnode)
+    srloc, sposloc = findCloc(sol, snode)
     if frloc == srloc
         return Inf, () -> nothing
     end
@@ -86,9 +86,9 @@ function nearNodeSwap(sol::Solution, vars::VRP)
     if route_load_change(frloc, fdemand, sdemand) > vars.capacity || route_load_change(srloc, sdemand, fdemand) > vars.capacity
         return Inf, () -> nothing
     end
-    oldp = pointdistance(vars,sol,frloc,fposloc) + pointdistance(vars,sol,srloc,sposloc)
+    oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
     swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
-    nd = pointdistance(vars,sol,frloc,fposloc) + pointdistance(vars,sol,srloc,sposloc)
+    nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
     swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
     newobj = sol.objective - oldp + nd
     function commitChange()
@@ -96,8 +96,8 @@ function nearNodeSwap(sol::Solution, vars::VRP)
         sol.objective = newobj
     end
     return newobj, commitChange
-
-    function randomNodeSwap(sol::Solution, vars::VRP)
+end
+function randomNodeSwap(sol::Solution, vars::VRP)
     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
     frloc, srloc = rand(1:vars.vehicles, 2)
     if frloc == srloc
@@ -112,9 +112,9 @@ function nearNodeSwap(sol::Solution, vars::VRP)
     if route_load_change(frloc, fdemand, sdemand) > vars.capacity || route_load_change(srloc, sdemand, fdemand) > vars.capacity
         return Inf, () -> nothing
     end
-    oldp = pointdistance(vars,sol,frloc,fposloc) + pointdistance(vars,sol,srloc,sposloc)
+    oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
     swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
-    nd = pointdistance(vars,sol,frloc,fposloc) + pointdistance(vars,sol,srloc,sposloc)
+    nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
     swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
     newobj = sol.objective - oldp + nd
     function commitChange()
@@ -125,21 +125,21 @@ function nearNodeSwap(sol::Solution, vars::VRP)
 end
 
 function localSearch(sol::Solution, vars::VRP)
-  
+
     numItr = 5e+4 * vars.customers
     sol.objective = recalc_obj_val(sol, vars)
-    Temperature = 1000
+    Temperature = abs(sol.objective / log(MathConstants.e, 0.97))
     numRuns = 1
     annealing_cycle = vars.customers * (vars.customers - 1) / 2
     best_sol = deepcopy(sol)
     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
     for _ = 1:numItr
         numRuns += 1
-        if numRuns > annealing_cycle 
+        if numRuns > annealing_cycle
             numRuns = 1
             Temperature *= 0.95
         end
-        nscore, changeFunc = nearNodeSwap(sol, vars)
+        nscore, changeFunc = randomNodeSwap(sol, vars)
         if nscore < best_sol.objective
             changeFunc()
             best_sol = deepcopy(sol)
@@ -147,81 +147,100 @@ function localSearch(sol::Solution, vars::VRP)
             changeFunc()
         end
     end
-    sol.objective = recalc_obj_val(sol,vars)
+    sol.objective = recalc_obj_val(sol, vars)
     newsol = deepcopy(best_sol)
+    sol2Opt(newsol,vars)
     newsol
 end
-
-function nn_heur(vars :: VRP)
+function nn_heur(vars::VRP)
     groups = []
     cust = [1:vars.customers...]
     while length(cust) != 0
         ind = rand(1:length(cust))
-        c = popat!(cust,ind)
+        c = popat!(cust, ind)
         curr_group = [c]
         curr_load = vars.demand[c]
-        cust_d = [(i,vars.distance_m[c,i]) for i in cust]
-        sort!(cust_d,by = x->x[2])
+        cust_d = [(i, vars.distance_m[c, i]) for i in cust]
+        sort!(cust_d, by=x -> x[2])
         i = 1
         while i <= length(cust_d)
             if curr_load + vars.demand[cust_d[i][1]] > vars.capacity
                 break
             end
-            push!(curr_group,cust_d[i][1])
-            filter!(x->x!=cust_d[i][1],cust)
-            curr_load+=vars.demand[cust_d[i][1]]
-            i+=1
+            push!(curr_group, cust_d[i][1])
+            filter!(x -> x != cust_d[i][1], cust)
+            curr_load += vars.demand[cust_d[i][1]]
+            i += 1
         end
-        push!(groups,Route(curr_group,length(curr_group),curr_load))
+        push!(groups, Route(curr_group, length(curr_group), curr_load))
     end
-    Solution(groups,0)
+    Solution(groups, 0)
 end
-function nn_method(vars :: VRP)
+function nn_method(vars::VRP)
     sol = nn_heur(vars)
-    sol.objective = recalc_obj_val(sol,vars)
-    sol2Opt(sol,vars)
-    vis_output(sol,vars)
+    sol.objective = recalc_obj_val(sol, vars)
+    sol2Opt(sol, vars)
+    vis_output(sol, vars)
     sol
 end
+function routeLengths(sol :: Solution)
+    print("Route length are ")
+    for route in sol.routes
+        print(route.seqlen," ")
+    end
+    println("")
+end
 
-function destroy_tsp(sol:: Solution, vrp :: VRP)
-    remove_c = sample(1:vrp.customers,Int(round(0.75*vrp.customers)),replace=false)
+function destroy_tsp(sol::Solution, vrp::VRP)
+    routeLengths(sol)
+    remove_c = sample(1:vrp.customers, Int(round(0.5* vrp.customers)), replace=false)
     model = Model(HiGHS.Optimizer)
-    set_silent(model)
+    # set_silent(model)
     C = 1:vrp.customers
     V = 1:vrp.vehicles
     mtrx = @variable(model, x[V, C], binary = true)
     @constraint(model, [c in C], sum(x[:, c]) == 1)
     @constraint(model, [v in V], sum(x[v, :] .* vrp.demand) <= vrp.capacity)
     cust_routes = get_customer_routes(sol)
-    remove_mat = zeros(vrp.vehicles,vrp.customers)
-    min_expr = @expression(model,0)
+    min_expr = @expression(model, 0)
     for c in C
         curr_route = cust_routes[c]
         if !(c in remove_c)
-            
-            @constraint(model,  x[curr_route,c] == 1)
+            @constraint(model, x[curr_route, c] == 1)
         else
-            min_expr += @expression(model,x[curr_route,c])
+            min_expr += @expression(model, x[curr_route, c])
         end
     end
-    # bad_cust_r = cust_routes[remove_c[1]]
-    # @constraint(model,x[bad_cust_r,remove_c[1]] == 0)
     @objective(model,Min,min_expr)
     optimize!(model)
-    lpvals = zeros(vrp.vehicles, vrp.customers)
-    for i = 1:vrp.vehicles
-        for j = 1:vrp.customers
-            lpvals[i, j] = value(mtrx[i, j])
+    lpvals = zeros(Int8,vrp.vehicles, vrp.customers)
+    changes = 0
+    for j = 1:vrp.customers
+        curr_route = cust_routes[j]
+        for i = 1:vrp.vehicles
+            lpvals[i, j] = Int(round(value(mtrx[i, j])))
+            if j in remove_c && curr_route == i && lpvals[i, j] == 0
+                changes += 1
+            end
         end
     end
-    println("available sols : ",result_count(model))
-    nsol = solverToSol(vrp,lpvals)
-    sol2Opt(nsol,vrp)
-    lnsol = localSearch(nsol,vrp)
-    sol2Opt(lnsol,vrp)
+    println(" num changes are : " ,changes," out of ",length(remove_c))
+    nsol = solverToSol(vrp, lpvals)
+    sol2Opt(nsol, vrp)
+    lnsol = localSearch(nsol, vrp)
+    sol2Opt(lnsol, vrp)
+    routeLengths(lnsol)
     lnsol
 end
+
+function fulldestroy(fl :: String)
+    vars,sol = initStuff(fl)
+    println("starting sol ",sol.objective)
+    ns = destroy_tsp(sol,vars)
+    println("new sol ",ns.objective)
+    vis_output(ns, vars)
+end
+
 function nn_to_lpmatrix(vars::VRP)
     sol = nn_heur(vars)
     solMat = zeros(Bool, vars.vehicles, vars.customers)
@@ -232,9 +251,9 @@ function nn_to_lpmatrix(vars::VRP)
     end
     solMat
 end
-function nn_based(sol :: Solution,vrp :: VRP)
+function nn_based(sol::Solution, vrp::VRP)
     nnMat = nn_to_lpmatrix(vrp)
-    remove_c = sample(1:vrp.customers,Int(round(0.35*vrp.customers)),replace=false)
+    remove_c = sample(1:vrp.customers, Int(round(0.35 * vrp.customers)), replace=false)
     model = Model(HiGHS.Optimizer)
     set_silent(model)
     C = 1:vrp.customers
@@ -243,15 +262,15 @@ function nn_based(sol :: Solution,vrp :: VRP)
     @constraint(model, [c in C], sum(x[:, c]) == 1)
     @constraint(model, [v in V], sum(x[v, :] .* vrp.demand) <= vrp.capacity)
     cust_routes = get_customer_routes(sol)
-    remove_mat = zeros(vrp.vehicles,vrp.customers)
-    obj_expr = @expression(model,0)
+    remove_mat = zeros(vrp.vehicles, vrp.customers)
+    obj_expr = @expression(model, 0)
     for c in remove_c
         curr_route = cust_routes[c]
-        obj_expr += @expression(model,x[curr_route,c]) 
+        obj_expr += @expression(model, x[curr_route, c])
     end
     # bad_cust_r = cust_routes[remove_c[1]]
     # @constraint(model,x[bad_cust_r,remove_c[1]] == 0)
-    @objective(model,Max,obj_expr)
+    @objective(model, Max, obj_expr)
     optimize!(model)
     lpvals = zeros(vrp.vehicles, vrp.customers)
     for i = 1:vrp.vehicles
@@ -259,14 +278,14 @@ function nn_based(sol :: Solution,vrp :: VRP)
             lpvals[i, j] = value(mtrx[i, j])
         end
     end
-    println("available sols : ",result_count(model))
-    nsol = solverToSol(vrp,lpvals)
-    sol2Opt(nsol,vrp)
-    lnsol = localSearch(nsol,vrp)
-    sol2Opt(lnsol,vrp)
+    println("available sols : ", result_count(model))
+    nsol = solverToSol(vrp, lpvals)
+    sol2Opt(nsol, vrp)
+    lnsol = localSearch(nsol, vrp)
+    sol2Opt(lnsol, vrp)
     lnsol
 end
-function initStuff(fl :: String) 
+function initStuff(fl::String)
     vars = read_input(fl)
     sol = getInitialSol(vars)
     sol2Opt(sol, vars)
@@ -280,9 +299,9 @@ function initStuff(fl :: String)
             sol = tmp
         end
     end
-    vars,sol
+    vars, sol
 end
-    
+
 function mn(fl::String)
     start_time = Base.Libc.time()
     vars = read_input(fl)
@@ -301,7 +320,7 @@ function mn(fl::String)
     end
     f_d = sol.objective
     end_time = Base.Libc.time()
-    println("initial obj is ",org_d," final is ",f_d ," improv is ",round( ((org_d-f_d)/org_d)*100,digits=2),"%")
+    println("initial obj is ", org_d, " final is ", f_d, " improv is ", round(((org_d - f_d) / org_d) * 100, digits=2), "%")
     vis_output(sol, vars)
     get_output(fl, end_time - start_time, sol, vars)
 end

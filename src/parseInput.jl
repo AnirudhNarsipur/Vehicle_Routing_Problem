@@ -69,6 +69,7 @@ function lpSolver(vrp::VRP)
     C = 1:vrp.customers
     V = 1:vrp.vehicles
     mtrx = @variable(model, x[V, C], binary = true)
+    fix(x[1,1],1,force=true)
     @constraint(model, [c in C], sum(x[:, c]) == 1)
     @constraint(model, [v in V], sum(x[v, :] .* vrp.demand) <= vrp.capacity)
     optimize!(model)

@@ -9,3 +9,4 @@ maximize the amount of change
 cleanup 
 - soln, vars 
 - 
+adding neighb constraint (JuMP guide) is too slow
