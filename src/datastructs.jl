@@ -24,4 +24,5 @@ end
 mutable struct Solution
     routes::Vector{Route}
     objective::Number
+    nodeloc :: Dict{Number,Tuple{Number,Number}}
 end

@@ -96,15 +96,19 @@ function solverToSol(vars::VRP, route_mtx)::Solution
         push!(routes, ls)
     end
     route_obj = []
-    for route in routes
+    cust_route_dict = Dict()
+    for i=1:length(routes)
+        route = routes[i]
         load = 0
-        for cust in route
+        for j=1:length(route)
+            cust = route[j]
             load += vars.demand[cust]
+            cust_route_dict[cust] = (i,j)
         end
         ln = length(route)
         push!(route_obj, Route(resize!(route, vars.customers), ln, load))
     end
-    sol = Solution(route_obj, 0)
+    sol = Solution(route_obj, 0,cust_route_dict)
     sol.objective = recalc_obj_val(sol, vars)
     sol
 end
