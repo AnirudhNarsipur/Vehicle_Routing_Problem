@@ -64,7 +64,8 @@ function localSearch(sol::Solution, vars::VRP)::Solution
     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
     # solutionCheck(sol,vars)
     wghts = Weights([1 / vars.customers for _ in 1:vars.customers])
-    route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
+    delta = 0
+    swaps = zeros(vars.customers)
     for _ = 1:numItr
         numRuns += 1
         if numRuns > annealing_cycle
@@ -87,14 +88,22 @@ function localSearch(sol::Solution, vars::VRP)::Solution
         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
         nscore = sol.objective - oldp + nd
         if nscore < best_sol.objective
+            # delta+=abs(vars.demand[first]-vars.demand[second])
+            # swaps[first]+=1
+            # swaps[second]+=1
             best_sol = deepcopy(sol)
             continue
         elseif rand() <= prob_func(nscore)
+            # delta+=abs(vars.demand[first]-vars.demand[second])
+            # swaps[first]+=1
+            # swaps[second]+=1
             continue
         else
             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
         end
     end
+    println("delta is ",delta/numItr)
+    println("swaps is ",swaps)
     sol2Opt(best_sol, vars)
     # solutionCheck(best_sol,vars)
     best_sol
