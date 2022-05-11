@@ -55,6 +55,8 @@ function getrandomNodeSwap(sol::Solution, vars::VRP)
     randomNodeSwap
 end
 function localSearch(sol::Solution, vars::VRP)::Solution
+    b = 0
+    t = 0
     numItr = 5e+4 * vars.customers
     sol.objective = recalc_obj_val(sol, vars)
     Temperature = abs(sol.objective / log(MathConstants.e, 0.97))
@@ -62,48 +64,51 @@ function localSearch(sol::Solution, vars::VRP)::Solution
     annealing_cycle = vars.customers * (vars.customers - 1) / 2
     best_sol = deepcopy(sol)
     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
+    randomNodeSwap = getrandomNodeSwap(sol, vars)
     # solutionCheck(sol,vars)
     wghts = Weights([1 / vars.customers for _ in 1:vars.customers])
-    delta = 0
-    swaps = zeros(vars.customers)
-    for _ = 1:numItr
+    route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
+    delta  =0 
+    for i = 1:numItr
         numRuns += 1
         if numRuns > annealing_cycle
             numRuns = 1
             Temperature *= 0.95
         end
-        ## Random Node Swaps
-
+        #start_time
         first, second = sample(1:vars.customers, wghts, 2, replace=false)
         frloc, fposloc = sol.nodeloc[first]
         srloc, sposloc = sol.nodeloc[second]
         if frloc == srloc
             continue
         end
-        if sol[frloc].load - vars.demand[first] + vars.demand[second] > vars.capacity || sol[srloc].load -  vars.demand[second] +  vars.demand[first] > vars.capacity
+        if route_load_change(frloc, vars.demand[first], vars.demand[second]) > vars.capacity || route_load_change(srloc, vars.demand[second], vars.demand[first]) > vars.capacity
             continue
         end
         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
-        nscore = sol.objective - oldp + nd
-        if nscore < best_sol.objective
-            # delta+=abs(vars.demand[first]-vars.demand[second])
-            # swaps[first]+=1
-            # swaps[second]+=1
-            best_sol = deepcopy(sol)
-            continue
-        elseif rand() <= prob_func(nscore)
-            # delta+=abs(vars.demand[first]-vars.demand[second])
-            # swaps[first]+=1
-            # swaps[second]+=1
-            continue
-        else
+        swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+        newobj = sol.objective - oldp + nd
+        function commitChange()
             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+            sol.objective = newobj
+        end
+        #END END
+        nscore, changeFunc = newobj, commitChange
+        if nscore < best_sol.objective
+            delta+=abs(vars.demand[first]-vars.demand[second])
+            changeFunc()
+            best_sol = deepcopy(sol)
+            b += 1
+            t += 1
+        elseif rand() <= prob_func(nscore)
+            changeFunc()
+            delta+=abs(vars.demand[first]-vars.demand[second])
+            t += 1
         end
     end
     println("delta is ",delta/numItr)
-    println("swaps is ",swaps)
     sol2Opt(best_sol, vars)
     # solutionCheck(best_sol,vars)
     best_sol
