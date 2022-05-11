@@ -6,12 +6,12 @@
         0     if route.seqlen==0
         0         return 0
         -     end
-     3984     distances = vars.depot_distance[route.seq[1]]
-    15936     for i = 1:route.seqlen
+     3712     distances = vars.depot_distance[route.seq[1]]
+    14848     for i = 1:route.seqlen
         0         if i == route.seqlen
-     7968             distances += vars.depot_distance[route.seq[i]]
+     7424             distances += vars.depot_distance[route.seq[i]]
         -         else
-    38528             distances += vars.distance_m[route.seq[i], route.seq[i+1]]
+    35264             distances += vars.distance_m[route.seq[i], route.seq[i+1]]
         -         end
         -     end
         0     distances
@@ -75,13 +75,13 @@
         0     while improve_made
         -         improve_made = false
         0         best_dist = route_distance(route, vars)
-     1216         for i = 1:route.seqlen
-     3904             for k = 1:route.seqlen
-     9840                 opt2Swap(route, i, k)
+     1152         for i = 1:route.seqlen
+     3648             for k = 1:route.seqlen
+     9072                 opt2Swap(route, i, k)
         0                 if (route_distance(route, vars) < best_dist)
         -                     improve_made = true
         -                 else
-    12000                     opt2Swap(route, i, k)
+    11184                     opt2Swap(route, i, k)
         -                 end
         -             end
         -         end

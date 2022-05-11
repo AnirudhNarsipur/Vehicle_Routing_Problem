@@ -72,13 +72,14 @@ function localSearch(sol::Solution, vars::VRP)::Solution
             Temperature *= 0.95
         end
         ## Random Node Swaps
+
         first, second = sample(1:vars.customers, wghts, 2, replace=false)
         frloc, fposloc = sol.nodeloc[first]
         srloc, sposloc = sol.nodeloc[second]
         if frloc == srloc
             continue
         end
-        if sol.routes[frloc].load + vars.demand[first] - vars.demand[second] > vars.capacity || sol.routes[srloc].load + vars.demand[second] - vars.demand[first] > vars.capacity
+        if sol[frloc].load - vars.demand[first] + vars.demand[second] > vars.capacity || sol[srloc].load -  vars.demand[second] +  vars.demand[first] > vars.capacity
             continue
         end
         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)

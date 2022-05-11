@@ -158,7 +158,7 @@
         -         end
         0         push!(solo, "0")
         -     end
-     1216     out = join([
+     1344     out = join([
         -         "{",
         -         kv_json("Instance", basename(fl)), ",",
         -         kv_json("Time", round(time, digits=2)), ",",

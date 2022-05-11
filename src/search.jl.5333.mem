@@ -6,10 +6,10 @@
         - function swapNodes(sol::Solution, vars::VRP, frloc::Number, fposloc::Number, srloc::Number, sposloc::Number)
         0     fdemand = vars.demand[sol.routes[frloc].seq[fposloc]]
         0     sdemand = vars.demand[sol.routes[srloc].seq[sposloc]]
- 13126848     sol.routes[frloc].load = sol.routes[frloc].load - fdemand + sdemand
- 13126848     sol.routes[srloc].load = sol.routes[srloc].load - sdemand + fdemand
-  8751232     sol.nodeloc[sol.routes[frloc].seq[fposloc]] = (srloc, sposloc)
-  8751232     sol.nodeloc[sol.routes[srloc].seq[sposloc]] = (frloc, fposloc)
+ 15620448     sol.routes[frloc].load = sol.routes[frloc].load - fdemand + sdemand
+ 15620448     sol.routes[srloc].load = sol.routes[srloc].load - sdemand + fdemand
+ 10413632     sol.nodeloc[sol.routes[frloc].seq[fposloc]] = (srloc, sposloc)
+ 10413632     sol.nodeloc[sol.routes[srloc].seq[sposloc]] = (frloc, fposloc)
         0     tmp = sol.routes[frloc].seq[fposloc]
         0     sol.routes[frloc].seq[fposloc] = sol.routes[srloc].seq[sposloc]
         0     sol.routes[srloc].seq[sposloc] = tmp
@@ -21,11 +21,11 @@
         0     if sol.routes[rloc].seqlen <= 1
         0         route_distance(sol.routes[rloc], vars)
         0     elseif rpos == 1
- 10209696         vars.depot_distance[c] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
+  4902240         vars.depot_distance[c] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
         0     elseif rpos == sol.routes[rloc].seqlen
-  8923200         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.depot_distance[c]
+ 11643648         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.depot_distance[c]
         -     else
-  6855840         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
+ 14961696         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
         -     end
         - end
         - 
@@ -55,20 +55,17 @@
         -     randomNodeSwap
         - end
         - function localSearch(sol::Solution, vars::VRP)::Solution
-       16     b = 0
-        -     t = 0
-       16     numItr = 5e+4 * vars.customers
+       32     numItr = 5e+4 * vars.customers
        16     sol.objective = recalc_obj_val(sol, vars)
        32     Temperature = abs(sol.objective / log(MathConstants.e, 0.97))
         -     numRuns = 1
        16     annealing_cycle = vars.customers * (vars.customers - 1) / 2
       336     best_sol = deepcopy(sol)
-  8661728     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
-        -     randomNodeSwap = getrandomNodeSwap(sol, vars)
+ 10414768     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
         -     # solutionCheck(sol,vars)
       240     wghts = Weights([1 / vars.customers for _ in 1:vars.customers])
- 65278848     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
- 23991920     for i = 1:numItr
+        -     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
+ 23991920     for _ = 1:numItr
         0         numRuns += 1
         0         if numRuns > annealing_cycle
         -             numRuns = 1
@@ -82,28 +79,20 @@
         0         if frloc == srloc
         -             continue
         -         end
- 16 319 712         if route_load_change(frloc, vars.demand[first], vars.demand[second]) > vars.capacity || route_load_change(srloc, vars.demand[second], vars.demand[first]) > vars.capacity
+ 33115040         if sol[frloc].load - vars.demand[first] + vars.demand[second] > vars.capacity || sol[srloc].load -  vars.demand[second] +  vars.demand[first] > vars.capacity
         -             continue
         -         end
- 28154464         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
- 12 994 368         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
- 28154464         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
- 12994368         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
-  4331456         newobj = sol.objective - oldp + nd
- 32485920         function commitChange()
-        0             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
-    44160             sol.objective = newobj
-        -         end
-        -         nscore, changeFunc = newobj, commitChange
-        -         ##Node Swap End
+ 34133216         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+ 15753792         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+ 34133216         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+  5251264         nscore = sol.objective - oldp + nd
         0         if nscore < best_sol.objective
-      288             changeFunc()
-     6048             best_sol = deepcopy(sol)
-        0             b += 1
-        0             t += 1
-  6496288         elseif rand() <= prob_func(nscore)
-    43872             changeFunc()
- 23999968             t += 1
+   460656             best_sol = deepcopy(sol)
+        -             continue
+  7811088         elseif rand() <= prob_func(nscore)
+        -             continue
+        -         else
+ 39486976             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
         -         end
         -     end
         0     sol2Opt(best_sol, vars)
