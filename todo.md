@@ -10,3 +10,11 @@ cleanup
 - soln, vars 
 - 
 adding neighb constraint (JuMP guide) is too slow
+
+<!-- 
+Get Local Search to handle weighted distributions
+Do Local Search 
+Rebuild using some method 
+Do local search again
+
+ -->

@@ -36,7 +36,14 @@ Given a solution and a customer
 return (routenumber,number in route)
 """
 function findCloc(sol::Solution, customer::Number)
-    sol.nodeloc[customer]
+    for (i, route) in enumerate(sol.routes)
+        for j = 1:route.seqlen
+            if route.seq[j] == customer
+                return (i, j)
+            end
+        end
+    end
+    error("Could not find customer!")
 end
 """
 Return a dictionary of customer route assigments
@@ -88,6 +95,8 @@ function sol2Opt(sol::Solution, vars::VRP)
         complete2optSwap(route, vars)
     end
     sol.objective = recalc_obj_val(sol, vars)
+    sol.nodeloc = customer_route_loc(sol)
+
 end
 
 """
@@ -143,4 +152,24 @@ function nn_method(vars::VRP)
     sol2Opt(sol, vars)
     vis_output(sol, vars)
     sol
+end
+
+function customer_route_loc(sol :: Solution)
+    dct = Dict{Number,Tuple{Number,Number}}()
+    for (i,route) in enumerate(sol.routes)
+        for j in 1:route.seqlen
+            dct[route.seq[j]] = (i,j)
+        end
+    end
+    dct
+end
+
+function solutionCheck(sol :: Solution,vars :: VRP)
+    #Loads are correct 
+    for route in sol.routes
+        @assert(route.load == calc_route_load(route,vars))
+    end
+    for c in 1:vars.customers
+        @assert(findCloc(sol,c) == sol.nodeloc[c])
+    end
 end

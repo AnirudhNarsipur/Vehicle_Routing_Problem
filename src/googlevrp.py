@@ -139,7 +139,7 @@ def mprint_solution(data, manager, routing, solution):
 def main():
     """Solve the CVRP problem."""
     # Instantiate the data problem.
-    data = create_data_model(read_input(Path("input/21_4_1.vrp")))
+    data = create_data_model(read_input(Path("input/101_11_2.vrp")))
 
     # Create the routing index manager.
     manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']),

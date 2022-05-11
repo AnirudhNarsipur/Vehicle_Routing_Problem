@@ -1,0 +1,175 @@
+        - function recalc_obj_val(sol::Solution, vars::VRP)
+       80     sum(map(r -> route_distance(r, vars), sol.routes))
+        - end
+        - 
+        - function route_distance(route::Route, vars::VRP)
+        0     if route.seqlen==0
+        0         return 0
+        -     end
+     4688     distances = vars.depot_distance[route.seq[1]]
+    18752     for i = 1:route.seqlen
+        0         if i == route.seqlen
+     9376             distances += vars.depot_distance[route.seq[i]]
+        -         else
+    46336             distances += vars.distance_m[route.seq[i], route.seq[i+1]]
+        -         end
+        -     end
+        0     distances
+        - end
+        - function euc_dist(a::Vector, b::Vector)
+    19200     sqrt(sum((a - b) .^ 2))
+        - end
+        - 
+        - 
+        - function create_distance_matrix(positions::Vector)
+        0     c = length(positions)
+     2032     dist_m = zeros(c, c)
+        0     for i = 1:c
+        0         for j = 1:c
+     3600             dist_m[i, j] = euc_dist(positions[i], positions[j])
+        -         end
+        -     end
+        0     dist_m
+        - end
+        - """
+        - Given a solution and a customer
+        - return (routenumber,number in route)
+        - """
+        - function findCloc(sol::Solution, customer::Number)
+        0     for (i, route) in enumerate(sol.routes)
+     2688         for j = 1:route.seqlen
+        0             if route.seq[j] == customer
+     2976                 return (i, j)
+        -             end
+        -         end
+        -     end
+        0     error("Could not find customer!")
+        - end
+        - """
+        - Return a dictionary of customer route assigments
+        - """
+        - function get_customer_routes(sol :: Solution) :: Dict{Number,Number}
+        -     c_r = Dict{Number,Number}()
+        -     for i = 1:length(sol.routes)
+        -         for j=1:sol.routes[i].seqlen
+        -             c_r[sol.routes[i].seq[j]] =  i 
+        -         end
+        -     end
+        -     c_r
+        - end
+        - 
+        - """
+        - 1. take route[1] to route[i-1] and add them in order to new_route
+        - 2. take route[i] to route[k] and add them in reverse order to new_route
+        - 3. take route[k+1] to end and add them in order to new_route
+        - """
+        - function opt2Swap(route::Route, i::Number, k::Number)
+        0     reverse!(view(route.seq, i:k))
+        - end
+        - 
+        - """
+        - Given route and vars makes route 2-opt
+        - """
+        - function complete2optSwap(route::Route, vars::VRP)
+        -     improve_made = true
+        0     while improve_made
+        -         improve_made = false
+        0         best_dist = route_distance(route, vars)
+     1408         for i = 1:route.seqlen
+     4608             for k = 1:route.seqlen
+    11808                 opt2Swap(route, i, k)
+        0                 if (route_distance(route, vars) < best_dist)
+        -                     improve_made = true
+        -                 else
+    13984                     opt2Swap(route, i, k)
+        -                 end
+        -             end
+        -         end
+        -     end
+        - end
+        - """
+        - Makes all routes in sol 2opt
+        - """
+        - function sol2Opt(sol::Solution, vars::VRP)
+        0     for route in sol.routes
+        0         complete2optSwap(route, vars)
+        -     end
+       32     sol.objective = recalc_obj_val(sol, vars)
+        0     sol.nodeloc = customer_route_loc(sol)
+        - 
+        - end
+        - 
+        - """
+        - Calculate the total load of the current route
+        - """
+        - function calc_route_load(route::Route, vars::VRP)::Number
+     1104     reduce((base,elem) -> base + vars.demand[route.seq[elem]],1:route.seqlen,init=0)
+        - end
+        - 
+        - """
+        - Prints current route lengths
+        - """
+        - function routeLengths(sol::Solution)
+        -     print("Route length are ")
+        -     for route in sol.routes
+        -         print(route.seqlen, " ")
+        -     end
+        -     println("")
+        - end
+        - 
+        - #### Nearest Neighbor Based
+        - 
+        -   
+        - 
+        - 
+        - function nn_heur(vars::VRP)
+        -     groups = []
+        -     cust = [1:vars.customers...]
+        -     while length(cust) != 0
+        -         ind = rand(1:length(cust))
+        -         c = popat!(cust, ind)
+        -         curr_group = [c]
+        -         curr_load = vars.demand[c]
+        -         cust_d = [(i, vars.distance_m[c, i]) for i in cust]
+        -         sort!(cust_d, by=x -> x[2])
+        -         i = 1
+        -         while i <= length(cust_d)
+        -             if curr_load + vars.demand[cust_d[i][1]] > vars.capacity
+        -                 break
+        -             end
+        -             push!(curr_group, cust_d[i][1])
+        -             filter!(x -> x != cust_d[i][1], cust)
+        -             curr_load += vars.demand[cust_d[i][1]]
+        -             i += 1
+        -         end
+        -         push!(groups, Route(curr_group, length(curr_group), curr_load))
+        -     end
+        -     Solution(groups, 0,Dict())
+        - end
+        - function nn_method(vars::VRP)
+        -     sol = nn_heur(vars)
+        -     sol.objective = recalc_obj_val(sol, vars)
+        -     sol2Opt(sol, vars)
+        -     vis_output(sol, vars)
+        -     sol
+        - end
+        - 
+        - function customer_route_loc(sol :: Solution)
+        0     dct = Dict{Number,Tuple{Number,Number}}()
+        0     for (i,route) in enumerate(sol.routes)
+      640         for j in 1:route.seqlen
+     1600             dct[route.seq[j]] = (i,j)
+        -         end
+        -     end
+        0     dct
+        - end
+        - 
+        - function solutionCheck(sol :: Solution,vars :: VRP)
+        -     #Loads are correct 
+        0     for route in sol.routes
+        0         @assert(route.load == calc_route_load(route,vars))
+        -     end
+       64     for c in 1:vars.customers
+      448         @assert(findCloc(sol,c) == sol.nodeloc[c])
+        -     end
+        - end

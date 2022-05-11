@@ -110,6 +110,7 @@ function solverToSol(vars::VRP, route_mtx)::Solution
     end
     sol = Solution(route_obj, 0,cust_route_dict)
     sol.objective = recalc_obj_val(sol, vars)
+    solutionCheck(sol,vars)
     sol
 end
 """
@@ -138,8 +139,8 @@ function read_goog_vrp(fl::String, vars::VRP)
                 ln = length(route)
                 push!(route_obj, Route(resize!(route, vars.customers), ln, load))
             end
-            sol = Solution(route_obj, objective)
-            recalc_obj_val(sol, vars)
+            sol = Solution(route_obj, objective,Dict())
+            sol2Opt(sol,vars)
             sol
         end
     catch

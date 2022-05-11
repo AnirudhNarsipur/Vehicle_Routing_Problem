@@ -11,7 +11,7 @@ struct VRP
     depot_distance::Vector
     # Node -> Position in node_pos
     node_pos::Dict{Number,Number}
-    # demand, customer node number 
+    #  customer node number  , demand
     node_demand::Vector{Tuple{Number,Number}}
     sorted_d :: Matrix
 end
@@ -26,3 +26,5 @@ mutable struct Solution
     objective::Number
     nodeloc :: Dict{Number,Tuple{Number,Number}}
 end
+Base.getindex(s :: Solution,i :: Int64) =  s.routes[i]
+Base.getindex(r :: Route,i :: Int64) = if i <= r.seqlen r.seq[i] else missing end

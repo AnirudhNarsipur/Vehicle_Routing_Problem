@@ -1,0 +1,188 @@
+        - include("./datastructs.jl")
+        - include("./utils.jl")
+        - 
+        - """
+        - Return a  vector of distances from nodes to depot
+        - """
+        - function depot_distance(positions::Vector, depot_pos::Vector)
+        - 
+        0     c = length(positions)
+      176     depot_m = zeros(c)
+        0     for i = 1:c
+      240         depot_m[i] = euc_dist(positions[i], depot_pos)
+        -     end
+        0     depot_m
+        - end
+        - function getSortedDemand(demand::Vector)
+        0     demand_index = map(i -> (i, demand[i]), 1:length(demand))
+        0     sort!(demand_index)
+      512     node_dict = Dict()
+     1504     for (index, elem) in enumerate(demand_index)
+      672         node_dict[elem[1]] = index
+        -     end
+       32     return node_dict, demand_index
+        - end
+        - function sorted_distance(dist_m::Matrix)
+        0     l = size(dist_m)[1]
+     2032     sort_m = Matrix{Tuple{Number,Number}}(undef, l, l)
+        0     for i = 1:l
+        0         tmp = map(j -> (dist_m[i, j], j), 1:l)
+     5520         sort_m[i,:] = sort(tmp,by=i->i[1])
+        -     end
+        0     sort_m
+        - end
+        - 
+        - function read_input(fl::String)
+        -     try
+        0         open(fl, "r") do io
+     1296             lines = readlines(io)
+       16             lines = [split(i) for i in lines]
+      112             customers, vehicles, capacity = [parse(Int64, i) for i in lines[1]]
+       16             depot_location = [floor(parse(Float64, i)) for i in lines[2][2:3]]
+       48             demand = []
+       48             positions = []
+       64             for i = 3:length(lines)
+        0                 if length(lines[i]) == 0
+        -                     break
+        -                 end
+     1136                 push!(demand, parse(Float64, lines[i][1]))
+     2064                 push!(positions, [floor(parse(Float64, lines[i][j])) for j = 2:3])
+        -             end
+        0             node_pos, node_demand = getSortedDemand(demand)
+        0             dist_m = create_distance_matrix(positions)
+       96             VRP(customers - 1, vehicles, capacity, demand, depot_location,
+        -                 positions, dist_m, depot_distance(positions, depot_location),
+        -                 node_pos, node_demand, sorted_distance(dist_m))
+        -         end
+        -     catch
+        0         error("could not read file!")
+        -     end
+        - end
+        - """
+        - Get Initial feasible solution to VRP from LP solver
+        - Returns matrix of VxC binary values
+        - """
+        - function lpSolver(vrp::VRP)
+        - 
+        0     model = Model(HiGHS.Optimizer)
+        0     set_silent(model)
+       32     C = 1:vrp.customers
+       32     V = 1:vrp.vehicles
+       64     mtrx = @variable(model, x[V, C], binary = true)
+       32     fix(x[1,1],1,force=true)
+      128     @constraint(model, [c in C], sum(x[:, c]) == 1)
+      304     @constraint(model, [v in V], sum(x[v, :] .* vrp.demand) <= vrp.capacity)
+        0     optimize!(model)
+        0     lpvals = zeros(vrp.vehicles, vrp.customers)
+       64     for i = 1:vrp.vehicles
+      320         for j = 1:vrp.customers
+     5968             lpvals[i, j] = value(mtrx[i, j])
+        -         end
+        -     end
+        0     lpvals
+        - end
+        - """
+        - Given VRP struct and LP result converts to Solution datastructure
+        - """
+        - function solverToSol(vars::VRP, route_mtx)::Solution
+       48     routes = []
+       64     for i = 1:vars.vehicles
+      240         ls = []
+      320         for j = 1:vars.customers
+     1200             if route_mtx[i, j] == 1
+     2640                 push!(ls, j)
+        -             end
+        -         end
+      208         push!(routes, ls)
+        -     end
+       48     route_obj = []
+      512     cust_route_dict = Dict()
+        0     for i=1:length(routes)
+        0         route = routes[i]
+        -         load = 0
+      320         for j=1:length(route)
+        0             cust = route[j]
+      240             load += vars.demand[cust]
+      800             cust_route_dict[cust] = (i,j)
+        -         end
+        0         ln = length(route)
+       80         push!(route_obj, Route(resize!(route, vars.customers), ln, load))
+        -     end
+       32     sol = Solution(route_obj, 0,cust_route_dict)
+       16     sol.objective = recalc_obj_val(sol, vars)
+        0     solutionCheck(sol,vars)
+        0     sol
+        - end
+        - """
+        - Return a initial feasible solution
+        - """
+        - function getInitialSol(vars::VRP)
+        -     route_mtx = lpSolver(vars)
+        -     solverToSol(vars, route_mtx)
+        - end
+        - 
+        - function read_goog_vrp(fl::String, vars::VRP)
+        -     try
+        -         open(fl, "r") do io
+        -             lines = readlines(io)
+        -             lines = [split(i) for i in lines]
+        -             objective = parse(Float64, lines[1][1])
+        -             # println("i is ",lines[2][2:end-1]," length ",length(lines[2][2:end-1]))
+        -             routes = [map(x -> parse(Int64, x), i[2:end-1]) for i in lines[2:end]]
+        -             # println("routes are ",routes)
+        -             route_obj = []
+        -             for route in routes
+        -                 load = 0
+        -                 for cust in route
+        -                     load += vars.demand[cust]
+        -                 end
+        -                 ln = length(route)
+        -                 push!(route_obj, Route(resize!(route, vars.customers), ln, load))
+        -             end
+        -             sol = Solution(route_obj, objective,Dict())
+        -             sol2Opt(sol,vars)
+        -             sol
+        -         end
+        -     catch
+        -         error("could not read test vrp file")
+        -     end
+        - end
+        - 
+        - function get_output(fl::String, time, sol::Solution, vars::VRP)
+       64     kv_json = (k, v) -> join(['"', k, """": """, '"', v, '"'])
+       48     solo = []
+        0     for route in sol.routes
+       80         push!(solo, "0")
+      320         for i = 1:route.seqlen
+      656             push!(solo, string(route.seq[i]))
+        -         end
+        0         push!(solo, "0")
+        -     end
+     1216     out = join([
+        -         "{",
+        -         kv_json("Instance", basename(fl)), ",",
+        -         kv_json("Time", round(time, digits=2)), ",",
+        -         kv_json("Result", string(round(sol.objective, digits=2))), ",",
+        -         kv_json("Solution", join(solo, " ")),
+        -         "}"
+        -     ])
+       16     println(out)
+        - end
+        - 
+        - function vis_output(sol::Solution, vars::VRP)
+      112     lines = [string(sol.objective) * " 0"]
+        0     for route in sol.routes
+        -         out = "0"
+      320         for i = 1:route.seqlen
+      480             out *= " "
+      800             out *= string(route.seq[i])
+        -         end
+      160         out *= " 0"
+       80         push!(lines, out)
+        -     end
+       16     open("vistest.vrp", "w") do io
+        0         for line in lines
+      208             write(io, line * "\n")
+        -         end
+        -     end
+        - end
