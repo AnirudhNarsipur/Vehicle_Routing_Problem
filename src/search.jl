@@ -1,6 +1,7 @@
 # module TRP
 using StatsBase
 using Random
+using Distributions
 include("./parseInput.jl")
 
 function swapNodes(sol::Solution, vars::VRP, frloc::Number, fposloc::Number, srloc::Number, sposloc::Number)
@@ -54,29 +55,50 @@ function getrandomNodeSwap(sol::Solution, vars::VRP)
     end
     randomNodeSwap
 end
-function localSearch(sol::Solution, vars::VRP)::Solution
+function get_dist(vars :: VRP)
+    ls =[]
+    v = mean(vars.demand)/2
+    println("v is ",v)
+    for i=1:vars.customers
+        pdfvals = [abs(i-j) <= v ?  1 : 0 for j in 1:vars.customers]
+        pdfvals[i] = 0
+        push!(ls,Weights(StatsBase.LinearAlgebra.normalize(pdfvals)))
+    end
+    ls
+end
+function getSecondNode(dist :: Weights,vars :: VRP)
+    vars.node_demand[sample(1:vars.customers,dist)][1]
+end
+function localSearch(sol::Solution, vars::VRP)
     b = 0
     t = 0
+    numCycles = 0
     numItr = 5e+4 * vars.customers
+    # numItr = (numCycles * vars.customers * vars.customers) / 2
     sol.objective = recalc_obj_val(sol, vars)
     Temperature = abs(sol.objective / log(MathConstants.e, 0.97))
     numRuns = 1
-    annealing_cycle = vars.customers * (vars.customers - 1) / 2
+    annealing_cycle = (vars.customers * (vars.customers - 1) / 2) 
     best_sol = deepcopy(sol)
     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
     randomNodeSwap = getrandomNodeSwap(sol, vars)
     # solutionCheck(sol,vars)
     wghts = Weights([1 / vars.customers for _ in 1:vars.customers])
     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
-    delta  =0 
+    delta :: Int64 = 0
+    dists = get_dist(vars)
     for i = 1:numItr
         numRuns += 1
         if numRuns > annealing_cycle
             numRuns = 1
             Temperature *= 0.95
+            numCycles+=1
         end
         #start_time
-        first, second = sample(1:vars.customers, wghts, 2, replace=false)
+        first = sample(1:vars.customers, wghts, 1, replace=false)[1]
+        second = getSecondNode(dists[vars.node_pos[first]],vars)
+        # first,second = sample(1:vars.customers, wghts, 2, replace=false)
+        # println("first and second are ",first, " ",second)
         frloc, fposloc = sol.nodeloc[first]
         srloc, sposloc = sol.nodeloc[second]
         if frloc == srloc
@@ -97,21 +119,21 @@ function localSearch(sol::Solution, vars::VRP)::Solution
         #END END
         nscore, changeFunc = newobj, commitChange
         if nscore < best_sol.objective
-            delta+=abs(vars.demand[first]-vars.demand[second])
+            delta += abs(vars.demand[first] - vars.demand[second])
             changeFunc()
             best_sol = deepcopy(sol)
             b += 1
             t += 1
         elseif rand() <= prob_func(nscore)
             changeFunc()
-            delta+=abs(vars.demand[first]-vars.demand[second])
+            delta += abs(vars.demand[first] - vars.demand[second])
             t += 1
         end
     end
-    println("delta is ",delta/numItr)
+    println("delta is ", delta / t, "t is ",t," itr is ",numItr," cycles ",numCycles)
     sol2Opt(best_sol, vars)
     # solutionCheck(best_sol,vars)
-    best_sol
+    best_sol, (delta / t)
 end
 """
 Returns a lm fraction of the nearest neighbors of a random node
@@ -292,10 +314,13 @@ function mn(fl::String)
     org_d = sol.objective
     numRuns = 1
     bestsol = sol
+    stfl = "stats.txt"
+
     for i = 1:numRuns
         tmp = deepcopy(sol)
         # tmp = deepcopy(destroy_tsp(tmp,vars))
-        tmp = localSearch(tmp, vars)
+        tmp, d = localSearch(tmp, vars)
+        # write(io,join([basename(fl),vars.capacity,mean(vars.demand),std(vars.demand),d,"\n"]," "))
         # println("objective is ",tmp.objective)
         tmp.objective = recalc_obj_val(tmp, vars)
         if tmp.objective < bestsol.objective
