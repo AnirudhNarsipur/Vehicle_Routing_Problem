@@ -82,11 +82,11 @@
         0         if frloc == srloc
         -             continue
         -         end
- 16319712         if route_load_change(frloc, vars.demand[first], vars.demand[second]) > vars.capacity || route_load_change(srloc, vars.demand[second], vars.demand[first]) > vars.capacity
+ 16 319 712         if route_load_change(frloc, vars.demand[first], vars.demand[second]) > vars.capacity || route_load_change(srloc, vars.demand[second], vars.demand[first]) > vars.capacity
         -             continue
         -         end
  28154464         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
- 12994368         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+ 12 994 368         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
  28154464         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
  12994368         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
   4331456         newobj = sol.objective - oldp + nd
