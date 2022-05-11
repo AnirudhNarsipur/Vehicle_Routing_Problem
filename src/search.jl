@@ -31,10 +31,10 @@ end
 
 function getrandomNodeSwap(sol::Solution, vars::VRP)
     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
-    function randomNodeSwap(wghts :: Weights)
-        first,second = sample(1:vars.customers,wghts,2,replace=false)
-        frloc,fposloc = sol.nodeloc[first]
-        srloc,sposloc = sol.nodeloc[second]
+    function randomNodeSwap(wghts::Weights)
+        first, second = sample(1:vars.customers, wghts, 2, replace=false)
+        frloc, fposloc = sol.nodeloc[first]
+        srloc, sposloc = sol.nodeloc[second]
         if frloc == srloc
             return Inf, () -> nothing
         end
@@ -54,26 +54,48 @@ function getrandomNodeSwap(sol::Solution, vars::VRP)
     end
     randomNodeSwap
 end
-function localSearch(sol::Solution, vars::VRP) :: Solution
+function localSearch(sol::Solution, vars::VRP)::Solution
     b = 0
     t = 0
     numItr = 5e+4 * vars.customers
     sol.objective = recalc_obj_val(sol, vars)
-    Temperature = abs(sol.objective  / log(MathConstants.e, 0.97))
+    Temperature = abs(sol.objective / log(MathConstants.e, 0.97))
     numRuns = 1
     annealing_cycle = vars.customers * (vars.customers - 1) / 2
     best_sol = deepcopy(sol)
     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
     randomNodeSwap = getrandomNodeSwap(sol, vars)
     # solutionCheck(sol,vars)
-    wghts = Weights([1/vars.customers for _ in 1:vars.customers])
+    wghts = Weights([1 / vars.customers for _ in 1:vars.customers])
+    route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
     for i = 1:numItr
         numRuns += 1
         if numRuns > annealing_cycle
             numRuns = 1
             Temperature *= 0.95
         end
-        nscore, changeFunc = randomNodeSwap(wghts)
+        ## Random Node Swaps
+
+        first, second = sample(1:vars.customers, wghts, 2, replace=false)
+        frloc, fposloc = sol.nodeloc[first]
+        srloc, sposloc = sol.nodeloc[second]
+        if frloc == srloc
+            continue
+        end
+        if route_load_change(frloc, vars.demand[first], vars.demand[second]) > vars.capacity || route_load_change(srloc, vars.demand[second], vars.demand[first]) > vars.capacity
+            continue
+        end
+        oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+        swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+        nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+        swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+        newobj = sol.objective - oldp + nd
+        function commitChange()
+            swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+            sol.objective = newobj
+        end
+        nscore, changeFunc = newobj, commitChange
+        ##Node Swap End
         if nscore < best_sol.objective
             changeFunc()
             best_sol = deepcopy(sol)
@@ -84,7 +106,7 @@ function localSearch(sol::Solution, vars::VRP) :: Solution
             t += 1
         end
     end
-    sol2Opt(best_sol,vars)
+    sol2Opt(best_sol, vars)
     # solutionCheck(best_sol,vars)
     best_sol
 end
@@ -98,7 +120,7 @@ function nn_cluster(vars::VRP, lm::Float64)
     sort!(cust_d, by=x -> x[2])
     map(x -> x[1], cust_d[1:numtake])
 end
-function destroy_tsp(sol::Solution, vrp::VRP,remove_c)
+function destroy_tsp(sol::Solution, vrp::VRP, remove_c)
     model = Model(HiGHS.Optimizer)
     set_silent(model)
     C = 1:vrp.customers
@@ -109,7 +131,7 @@ function destroy_tsp(sol::Solution, vrp::VRP,remove_c)
     min_expr = @expression(model, 0)
     cust_routes = get_customer_routes(sol)
     for c in C
-        curr_route =cust_routes[c]
+        curr_route = cust_routes[c]
         if !(c in remove_c)
             @constraint(model, x[curr_route, c] == 1)
         else
@@ -132,22 +154,22 @@ function destroy_tsp(sol::Solution, vrp::VRP,remove_c)
     println(" num changes are : ", changes, " out of ", length(remove_c))
     nsol = solverToSol(vrp, lpvals)
     sol2Opt(nsol, vrp)
-    println("before local search ",nsol.objective)
+    println("before local search ", nsol.objective)
     lnsol = localSearch(nsol, vrp)
-    println("final objective is ",lnsol.objective)
+    println("final objective is ", lnsol.objective)
     lnsol
 end
-function n_rand_groups(vars :: VRP,g :: Number)
+function n_rand_groups(vars::VRP, g::Number)
     cust = shuffle(1:vars.customers)
-    take = Int(round(vars.customers/g))
+    take = Int(round(vars.customers / g))
     ls = []
     i = 1
     while i <= length(cust)
-        if i+take <= length(cust)
-            push!(ls,cust[i:i+take])
-            i+=(take+1)
+        if i + take <= length(cust)
+            push!(ls, cust[i:i+take])
+            i += (take + 1)
         else
-            push!(ls,cust[i:end])
+            push!(ls, cust[i:end])
             break
         end
     end
@@ -156,18 +178,18 @@ end
 function fulldestroy(fl::String)
     vars = read_input(fl)
     sol = getInitialSol(vars)
-    sol = localSearch(sol,vars)
+    sol = localSearch(sol, vars)
     println("starting sol ", sol.objective)
     # groups = n_rand_groups(vars,3)
-    take = Int(round(0.95*vars.customers))
+    take = Int(round(0.95 * vars.customers))
     # group = sample(1:vars.customers,take,replace=false)
     # group = map(x -> x[1] ,vars.node_demand[1:take])
-    group = get_closest_routes(sol,vars)
+    group = get_closest_routes(sol, vars)
     vis_output(sol, vars)
     return nothing
     println("rebuilding with close routes")
-    sol = destroy_tsp(sol,vars,group)
-    
+    sol = destroy_tsp(sol, vars, group)
+
     println("new sol ", sol.objective)
     vis_output(sol, vars)
 end
@@ -182,10 +204,10 @@ function nn_to_lpmatrix(vars::VRP)
     foreach(t -> solMat[t[1], t[2]] = 1, enumerate(centers))
     cust = filter(i -> !(i in centers), 1:vars.customers)
     for c in cust
-        argmin,min = 1, Inf
-        for (i,center) in enumerate(centers)
+        argmin, min = 1, Inf
+        for (i, center) in enumerate(centers)
             if vars.distance_m[c, center] < argmin
-                 argmin,min = i, vars.distance_m[c, center]
+                argmin, min = i, vars.distance_m[c, center]
             end
         end
         solMat[argmin, c] = 1
@@ -224,35 +246,35 @@ function nn_based(sol::Solution, vrp::VRP)
     lnsol
 end
 
-function route_center(route :: Route,vars :: VRP)
-    cx,cy = 0,0
-    for i=1:route.seqlen
+function route_center(route::Route, vars::VRP)
+    cx, cy = 0, 0
+    for i = 1:route.seqlen
         cx += vars.positions[route[i]][1]
         cy += vars.positions[route[i]][2]
     end
-    [cx/route.seqlen,cy/route.seqlen]
+    [cx / route.seqlen, cy / route.seqlen]
 end
-function average_center_distance(route :: Route,center :: Vector,vars :: VRP)
+function average_center_distance(route::Route, center::Vector, vars::VRP)
     dist = 0
-    for i=1:route.seqlen
-        dist+=euc_dist(vars.positions[route[i]],center)
+    for i = 1:route.seqlen
+        dist += euc_dist(vars.positions[route[i]], center)
     end
-    dist/route.seqlen
+    dist / route.seqlen
 end
-function get_closest_routes(sol :: Solution,vars :: VRP)
-    centers = map(i -> route_center(sol[i],vars),1:vars.vehicles)
-    centerDists = map(i -> (i,average_center_distance(sol[i],centers[i],vars)),1:vars.vehicles)
-    sort!(centerDists,by=i->i[2])
+function get_closest_routes(sol::Solution, vars::VRP)
+    centers = map(i -> route_center(sol[i], vars), 1:vars.vehicles)
+    centerDists = map(i -> (i, average_center_distance(sol[i], centers[i], vars)), 1:vars.vehicles)
+    sort!(centerDists, by=i -> i[2])
     randRoute = centerDists[end][1]
-    println("center is ",randRoute)
-    routeDist = map(i -> (i,euc_dist(centers[randRoute],centers[i])),1:vars.vehicles)
-    sort!(routeDist,by=i->i[2])
-    closeRoutes = map(i -> i[1],routeDist)[1:3]
-    println("closest routes are ",closeRoutes)
+    println("center is ", randRoute)
+    routeDist = map(i -> (i, euc_dist(centers[randRoute], centers[i])), 1:vars.vehicles)
+    sort!(routeDist, by=i -> i[2])
+    closeRoutes = map(i -> i[1], routeDist)[1:3]
+    println("closest routes are ", closeRoutes)
     remove_c = []
     for r in closeRoutes
         x = sol[r].seq[2:sol[r].seqlen]
-        append!(remove_c,x)
+        append!(remove_c, x)
     end
     remove_c
 end
@@ -282,7 +304,7 @@ function mn(fl::String)
     println("initial obj is ", org_d, " final is ", f_d, " improv is ", round(((org_d - f_d) / org_d) * 100, digits=2), "%")
     vis_output(bestsol, vars)
     get_output(fl, end_time - start_time, bestsol, vars)
-     
+
 end
 
 # function __init__()

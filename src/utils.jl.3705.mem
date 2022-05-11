@@ -6,12 +6,12 @@
         0     if route.seqlen==0
         0         return 0
         -     end
-     4688     distances = vars.depot_distance[route.seq[1]]
-    18752     for i = 1:route.seqlen
+     3984     distances = vars.depot_distance[route.seq[1]]
+    15936     for i = 1:route.seqlen
         0         if i == route.seqlen
-     9376             distances += vars.depot_distance[route.seq[i]]
+     7968             distances += vars.depot_distance[route.seq[i]]
         -         else
-    46336             distances += vars.distance_m[route.seq[i], route.seq[i+1]]
+    38528             distances += vars.distance_m[route.seq[i], route.seq[i+1]]
         -         end
         -     end
         0     distances
@@ -75,13 +75,13 @@
         0     while improve_made
         -         improve_made = false
         0         best_dist = route_distance(route, vars)
-     1408         for i = 1:route.seqlen
-     4608             for k = 1:route.seqlen
-    11808                 opt2Swap(route, i, k)
+     1216         for i = 1:route.seqlen
+     3904             for k = 1:route.seqlen
+     9840                 opt2Swap(route, i, k)
         0                 if (route_distance(route, vars) < best_dist)
         -                     improve_made = true
         -                 else
-    13984                     opt2Swap(route, i, k)
+    12000                     opt2Swap(route, i, k)
         -                 end
         -             end
         -         end
@@ -103,7 +103,7 @@
         - Calculate the total load of the current route
         - """
         - function calc_route_load(route::Route, vars::VRP)::Number
-     1104     reduce((base,elem) -> base + vars.demand[route.seq[elem]],1:route.seqlen,init=0)
+     1120     reduce((base,elem) -> base + vars.demand[route.seq[elem]],1:route.seqlen,init=0)
         - end
         - 
         - """

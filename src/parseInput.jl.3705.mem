@@ -35,7 +35,7 @@
         - function read_input(fl::String)
         -     try
         0         open(fl, "r") do io
-     1296             lines = readlines(io)
+       16             lines = readlines(io)
        16             lines = [split(i) for i in lines]
       112             customers, vehicles, capacity = [parse(Int64, i) for i in lines[1]]
        16             depot_location = [floor(parse(Float64, i)) for i in lines[2][2:3]]

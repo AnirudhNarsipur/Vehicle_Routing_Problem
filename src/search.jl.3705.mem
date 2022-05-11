@@ -1,4 +1,4 @@
-        0 # module TRP
+        - # module TRP
         - using StatsBase
         - using Random
         - include("./parseInput.jl")
@@ -6,10 +6,10 @@
         - function swapNodes(sol::Solution, vars::VRP, frloc::Number, fposloc::Number, srloc::Number, sposloc::Number)
         0     fdemand = vars.demand[sol.routes[frloc].seq[fposloc]]
         0     sdemand = vars.demand[sol.routes[srloc].seq[sposloc]]
- 12493872     sol.routes[frloc].load = sol.routes[frloc].load - fdemand + sdemand
- 12493872     sol.routes[srloc].load = sol.routes[srloc].load - sdemand + fdemand
-  8329248     sol.nodeloc[sol.routes[frloc].seq[fposloc]] = (srloc, sposloc)
-  8329248     sol.nodeloc[sol.routes[srloc].seq[sposloc]] = (frloc, fposloc)
+ 13126848     sol.routes[frloc].load = sol.routes[frloc].load - fdemand + sdemand
+ 13126848     sol.routes[srloc].load = sol.routes[srloc].load - sdemand + fdemand
+  8751232     sol.nodeloc[sol.routes[frloc].seq[fposloc]] = (srloc, sposloc)
+  8751232     sol.nodeloc[sol.routes[srloc].seq[sposloc]] = (frloc, fposloc)
         0     tmp = sol.routes[frloc].seq[fposloc]
         0     sol.routes[frloc].seq[fposloc] = sol.routes[srloc].seq[sposloc]
         0     sol.routes[srloc].seq[sposloc] = tmp
@@ -21,70 +21,92 @@
         0     if sol.routes[rloc].seqlen <= 1
         0         route_distance(sol.routes[rloc], vars)
         0     elseif rpos == 1
-  8237952         vars.depot_distance[c] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
+ 10209696         vars.depot_distance[c] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
         0     elseif rpos == sol.routes[rloc].seqlen
-  8925312         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.depot_distance[c]
+  8923200         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.depot_distance[c]
         -     else
-  7566912         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
+  6855840         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
         -     end
         - end
         - 
         - function getrandomNodeSwap(sol::Solution, vars::VRP)
- 65147632     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
-        -     function randomNodeSwap(wghts :: Weights)
- 24000000         first,second = sample(1:vars.customers,wghts,2,replace=false)
-        0         frloc,fposloc = sol.nodeloc[first]
-        0         srloc,sposloc = sol.nodeloc[second]
-        0         if frloc == srloc
-        0             return Inf, () -> nothing
+        -     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
+        -     function randomNodeSwap(wghts::Weights)
+        -         first, second = sample(1:vars.customers, wghts, 2, replace=false)
+        -         frloc, fposloc = sol.nodeloc[first]
+        -         srloc, sposloc = sol.nodeloc[second]
+        -         if frloc == srloc
+        -             return Inf, () -> nothing
         -         end
- 16286912         if route_load_change(frloc, vars.demand[first], vars.demand[second]) > vars.capacity || route_load_change(srloc, vars.demand[second], vars.demand[first]) > vars.capacity
-        0             return Inf, () -> nothing
+        -         if route_load_change(frloc, vars.demand[first], vars.demand[second]) > vars.capacity || route_load_change(srloc, vars.demand[second], vars.demand[first]) > vars.capacity
+        -             return Inf, () -> nothing
         -         end
- 26791024         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
- 12364992         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
- 26790832         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
- 12364992         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
-  4121696         newobj = sol.objective - oldp + nd
- 30912720         function commitChange()
-        0             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
-    42928             sol.objective = newobj
+        -         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+        -         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+        -         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+        -         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+        -         newobj = sol.objective - oldp + nd
+        -         function commitChange()
+        -             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+        -             sol.objective = newobj
         -         end
- 20608480         return newobj, commitChange
+        -         return newobj, commitChange
         -     end
         -     randomNodeSwap
         - end
-        - function localSearch(sol::Solution, vars::VRP) :: Solution
+        - function localSearch(sol::Solution, vars::VRP)::Solution
        16     b = 0
         -     t = 0
        16     numItr = 5e+4 * vars.customers
        16     sol.objective = recalc_obj_val(sol, vars)
-       32     Temperature = abs(sol.objective  / log(MathConstants.e, 0.97))
+       32     Temperature = abs(sol.objective / log(MathConstants.e, 0.97))
         -     numRuns = 1
        16     annealing_cycle = vars.customers * (vars.customers - 1) / 2
       336     best_sol = deepcopy(sol)
- 47998928     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
-        0     randomNodeSwap = getrandomNodeSwap(sol, vars)
+  8661728     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
+        -     randomNodeSwap = getrandomNodeSwap(sol, vars)
         -     # solutionCheck(sol,vars)
-      240     wghts = Weights([1/vars.customers for _ in 1:vars.customers])
+      240     wghts = Weights([1 / vars.customers for _ in 1:vars.customers])
+ 65278848     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
  23991920     for i = 1:numItr
         0         numRuns += 1
         0         if numRuns > annealing_cycle
         -             numRuns = 1
    114272             Temperature *= 0.95
         -         end
-114547632         nscore, changeFunc = randomNodeSwap(wghts)
+        -         ## Random Node Swaps
+        - 
+ 24000000         first, second = sample(1:vars.customers, wghts, 2, replace=false)
+        0         frloc, fposloc = sol.nodeloc[first]
+        0         srloc, sposloc = sol.nodeloc[second]
+        0         if frloc == srloc
+        -             continue
+        -         end
+ 16319712         if route_load_change(frloc, vars.demand[first], vars.demand[second]) > vars.capacity || route_load_change(srloc, vars.demand[second], vars.demand[first]) > vars.capacity
+        -             continue
+        -         end
+ 28154464         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+ 12994368         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+ 28154464         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+ 12994368         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+  4331456         newobj = sol.objective - oldp + nd
+ 32485920         function commitChange()
+        0             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+    44160             sol.objective = newobj
+        -         end
+        -         nscore, changeFunc = newobj, commitChange
+        -         ##Node Swap End
         0         if nscore < best_sol.objective
-      256             changeFunc()
-     5376             best_sol = deepcopy(sol)
+      288             changeFunc()
+     6048             best_sol = deepcopy(sol)
         0             b += 1
         0             t += 1
- 35999232         elseif rand() <= prob_func(nscore)
-    42672             changeFunc()
+  6496288         elseif rand() <= prob_func(nscore)
+    43872             changeFunc()
  23999968             t += 1
         -         end
         -     end
-        0     sol2Opt(best_sol,vars)
+        0     sol2Opt(best_sol, vars)
         -     # solutionCheck(best_sol,vars)
         0     best_sol
         - end
@@ -98,7 +120,7 @@
         -     sort!(cust_d, by=x -> x[2])
         -     map(x -> x[1], cust_d[1:numtake])
         - end
-        - function destroy_tsp(sol::Solution, vrp::VRP,remove_c)
+        - function destroy_tsp(sol::Solution, vrp::VRP, remove_c)
         -     model = Model(HiGHS.Optimizer)
         -     set_silent(model)
         -     C = 1:vrp.customers
@@ -109,7 +131,7 @@
         -     min_expr = @expression(model, 0)
         -     cust_routes = get_customer_routes(sol)
         -     for c in C
-        -         curr_route =cust_routes[c]
+        -         curr_route = cust_routes[c]
         -         if !(c in remove_c)
         -             @constraint(model, x[curr_route, c] == 1)
         -         else
@@ -132,22 +154,22 @@
         -     println(" num changes are : ", changes, " out of ", length(remove_c))
         -     nsol = solverToSol(vrp, lpvals)
         -     sol2Opt(nsol, vrp)
-        -     println("before local search ",nsol.objective)
+        -     println("before local search ", nsol.objective)
         -     lnsol = localSearch(nsol, vrp)
-        -     println("final objective is ",lnsol.objective)
+        -     println("final objective is ", lnsol.objective)
         -     lnsol
         - end
-        - function n_rand_groups(vars :: VRP,g :: Number)
+        - function n_rand_groups(vars::VRP, g::Number)
         -     cust = shuffle(1:vars.customers)
-        -     take = Int(round(vars.customers/g))
+        -     take = Int(round(vars.customers / g))
         -     ls = []
         -     i = 1
         -     while i <= length(cust)
-        -         if i+take <= length(cust)
-        -             push!(ls,cust[i:i+take])
-        -             i+=(take+1)
+        -         if i + take <= length(cust)
+        -             push!(ls, cust[i:i+take])
+        -             i += (take + 1)
         -         else
-        -             push!(ls,cust[i:end])
+        -             push!(ls, cust[i:end])
         -             break
         -         end
         -     end
@@ -156,18 +178,18 @@
         - function fulldestroy(fl::String)
         -     vars = read_input(fl)
         -     sol = getInitialSol(vars)
-        -     sol = localSearch(sol,vars)
+        -     sol = localSearch(sol, vars)
         -     println("starting sol ", sol.objective)
         -     # groups = n_rand_groups(vars,3)
-        -     take = Int(round(0.95*vars.customers))
+        -     take = Int(round(0.95 * vars.customers))
         -     # group = sample(1:vars.customers,take,replace=false)
         -     # group = map(x -> x[1] ,vars.node_demand[1:take])
-        -     group = get_closest_routes(sol,vars)
+        -     group = get_closest_routes(sol, vars)
         -     vis_output(sol, vars)
         -     return nothing
         -     println("rebuilding with close routes")
-        -     sol = destroy_tsp(sol,vars,group)
-        -     
+        -     sol = destroy_tsp(sol, vars, group)
+        - 
         -     println("new sol ", sol.objective)
         -     vis_output(sol, vars)
         - end
@@ -182,10 +204,10 @@
         -     foreach(t -> solMat[t[1], t[2]] = 1, enumerate(centers))
         -     cust = filter(i -> !(i in centers), 1:vars.customers)
         -     for c in cust
-        -         argmin,min = 1, Inf
-        -         for (i,center) in enumerate(centers)
+        -         argmin, min = 1, Inf
+        -         for (i, center) in enumerate(centers)
         -             if vars.distance_m[c, center] < argmin
-        -                  argmin,min = i, vars.distance_m[c, center]
+        -                 argmin, min = i, vars.distance_m[c, center]
         -             end
         -         end
         -         solMat[argmin, c] = 1
@@ -224,35 +246,35 @@
         -     lnsol
         - end
         - 
-        - function route_center(route :: Route,vars :: VRP)
-        -     cx,cy = 0,0
-        -     for i=1:route.seqlen
+        - function route_center(route::Route, vars::VRP)
+        -     cx, cy = 0, 0
+        -     for i = 1:route.seqlen
         -         cx += vars.positions[route[i]][1]
         -         cy += vars.positions[route[i]][2]
         -     end
-        -     [cx/route.seqlen,cy/route.seqlen]
+        -     [cx / route.seqlen, cy / route.seqlen]
         - end
-        - function average_center_distance(route :: Route,center :: Vector,vars :: VRP)
+        - function average_center_distance(route::Route, center::Vector, vars::VRP)
         -     dist = 0
-        -     for i=1:route.seqlen
-        -         dist+=euc_dist(vars.positions[route[i]],center)
+        -     for i = 1:route.seqlen
+        -         dist += euc_dist(vars.positions[route[i]], center)
         -     end
-        -     dist/route.seqlen
+        -     dist / route.seqlen
         - end
-        - function get_closest_routes(sol :: Solution,vars :: VRP)
-        -     centers = map(i -> route_center(sol[i],vars),1:vars.vehicles)
-        -     centerDists = map(i -> (i,average_center_distance(sol[i],centers[i],vars)),1:vars.vehicles)
-        -     sort!(centerDists,by=i->i[2])
+        - function get_closest_routes(sol::Solution, vars::VRP)
+        -     centers = map(i -> route_center(sol[i], vars), 1:vars.vehicles)
+        -     centerDists = map(i -> (i, average_center_distance(sol[i], centers[i], vars)), 1:vars.vehicles)
+        -     sort!(centerDists, by=i -> i[2])
         -     randRoute = centerDists[end][1]
-        -     println("center is ",randRoute)
-        -     routeDist = map(i -> (i,euc_dist(centers[randRoute],centers[i])),1:vars.vehicles)
-        -     sort!(routeDist,by=i->i[2])
-        -     closeRoutes = map(i -> i[1],routeDist)[1:3]
-        -     println("closest routes are ",closeRoutes)
+        -     println("center is ", randRoute)
+        -     routeDist = map(i -> (i, euc_dist(centers[randRoute], centers[i])), 1:vars.vehicles)
+        -     sort!(routeDist, by=i -> i[2])
+        -     closeRoutes = map(i -> i[1], routeDist)[1:3]
+        -     println("closest routes are ", closeRoutes)
         -     remove_c = []
         -     for r in closeRoutes
         -         x = sol[r].seq[2:sol[r].seqlen]
-        -         append!(remove_c,x)
+        -         append!(remove_c, x)
         -     end
         -     remove_c
         - end
@@ -282,10 +304,10 @@
       128     println("initial obj is ", org_d, " final is ", f_d, " improv is ", round(((org_d - f_d) / org_d) * 100, digits=2), "%")
         0     vis_output(bestsol, vars)
         0     get_output(fl, end_time - start_time, bestsol, vars)
-        0     vars,sol 
+        - 
         - end
         - 
         - # function __init__()
-        0 #     mn(ARGS[1])
+        - #     mn(ARGS[1])
         - # end
         - # end
