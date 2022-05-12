@@ -1,100 +1,91 @@
         - # module TRP
         - using StatsBase
         - using Random
+        - using Distributions
         - include("./parseInput.jl")
         - 
-        - function swapNodes(sol::Solution, vars::VRP, frloc::Number, fposloc::Number, srloc::Number, sposloc::Number)
+        - function swapNodes(sol::Solution, vars::VRP, frloc::Int64, fposloc::Int64, srloc::Int64, sposloc::Int64)
         0     fdemand = vars.demand[sol.routes[frloc].seq[fposloc]]
         0     sdemand = vars.demand[sol.routes[srloc].seq[sposloc]]
- 15620448     sol.routes[frloc].load = sol.routes[frloc].load - fdemand + sdemand
- 15620448     sol.routes[srloc].load = sol.routes[srloc].load - sdemand + fdemand
- 10413632     sol.nodeloc[sol.routes[frloc].seq[fposloc]] = (srloc, sposloc)
- 10413632     sol.nodeloc[sol.routes[srloc].seq[sposloc]] = (frloc, fposloc)
+        0     sol.routes[frloc].load = sol.routes[frloc].load - fdemand + sdemand
+        0     sol.routes[srloc].load = sol.routes[srloc].load - sdemand + fdemand
+        0     sol.nodeloc[sol.routes[frloc].seq[fposloc]] = (srloc, sposloc)
+        0     sol.nodeloc[sol.routes[srloc].seq[sposloc]] = (frloc, fposloc)
         0     tmp = sol.routes[frloc].seq[fposloc]
         0     sol.routes[frloc].seq[fposloc] = sol.routes[srloc].seq[sposloc]
         0     sol.routes[srloc].seq[sposloc] = tmp
         0     nothing
         - end
         - 
-        - function pointdistance(vars::VRP, sol::Solution, rloc::Number, rpos::Number)
-        0     c = sol.routes[rloc].seq[rpos]
-        0     if sol.routes[rloc].seqlen <= 1
-        0         route_distance(sol.routes[rloc], vars)
-        0     elseif rpos == 1
-  4902240         vars.depot_distance[c] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
-        0     elseif rpos == sol.routes[rloc].seqlen
- 11643648         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.depot_distance[c]
+        - function pointdistance(vars::VRP, sol::Solution, rloc::Int64, rpos::Int64)::Float64
+        -     c :: Int64 = sol.routes[rloc].seq[rpos]
+        -     if sol.routes[rloc].seqlen <= 1
+        -         vars.depot_distance[c]
+        -     elseif rpos == 1
+        -         vars.depot_distance[c] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
+        -     elseif rpos == sol.routes[rloc].seqlen
+        -         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.depot_distance[c]
         -     else
- 14961696         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
+        -         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
         -     end
         - end
-        - 
-        - function getrandomNodeSwap(sol::Solution, vars::VRP)
-        -     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
-        -     function randomNodeSwap(wghts::Weights)
-        -         first, second = sample(1:vars.customers, wghts, 2, replace=false)
-        -         frloc, fposloc = sol.nodeloc[first]
-        -         srloc, sposloc = sol.nodeloc[second]
-        -         if frloc == srloc
-        -             return Inf, () -> nothing
-        -         end
-        -         if route_load_change(frloc, vars.demand[first], vars.demand[second]) > vars.capacity || route_load_change(srloc, vars.demand[second], vars.demand[first]) > vars.capacity
-        -             return Inf, () -> nothing
-        -         end
-        -         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
-        -         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
-        -         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
-        -         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
-        -         newobj = sol.objective - oldp + nd
-        -         function commitChange()
-        -             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
-        -             sol.objective = newobj
-        -         end
-        -         return newobj, commitChange
+        - function get_dist(vars::VRP) :: Vector{Weights}
+        -     ls = []
+        -     v = mean(vars.demand) / 2
+        -     for i = 1:vars.customers
+        -         pdfvals = [abs(i - j) <= v ? 1 : 0 for j in 1:vars.customers]
+        -         pdfvals[i] = 0
+        -         push!(ls, Weights(StatsBase.LinearAlgebra.normalize(pdfvals)))
         -     end
-        -     randomNodeSwap
+        -     ls
         - end
-        - function localSearch(sol::Solution, vars::VRP)::Solution
-       32     numItr = 5e+4 * vars.customers
-       16     sol.objective = recalc_obj_val(sol, vars)
-       32     Temperature = abs(sol.objective / log(MathConstants.e, 0.97))
+        - function getSecondNode(dist::Weights, vars::VRP)::Int64
+        -     vars.node_demand[sample(1:vars.customers, dist)][1]
+        - end
+        - function localSearch(sol::Solution, vars::VRP) :: Solution
+        -     # numCycles = 0
+       16     numItr = 5e+4 * vars.customers
+        -     # numItr = (numCycles * vars.customers * vars.customers) / 2
+        -     # sol.objective = recalc_obj_val(sol, vars)
+       16     Temperature::Float64 = abs(sol.objective / log(MathConstants.e, 0.97))
         -     numRuns = 1
-       16     annealing_cycle = vars.customers * (vars.customers - 1) / 2
+        0     annealing_cycle::Int64 = (vars.customers * (vars.customers - 1) / 2)
       336     best_sol = deepcopy(sol)
- 10414768     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
+        -     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
         -     # solutionCheck(sol,vars)
-      240     wghts = Weights([1 / vars.customers for _ in 1:vars.customers])
-        -     route_load_change = (rn, f, s) -> sol.routes[rn].load - f + s
- 23991920     for _ = 1:numItr
+        0     for _ = 1:numItr
         0         numRuns += 1
         0         if numRuns > annealing_cycle
         -             numRuns = 1
-   114272             Temperature *= 0.95
+    41024             Temperature *= 0.95
         -         end
-        -         ## Random Node Swaps
-        - 
- 24000000         first, second = sample(1:vars.customers, wghts, 2, replace=false)
-        0         frloc, fposloc = sol.nodeloc[first]
-        0         srloc, sposloc = sol.nodeloc[second]
+160 000 000         frloc :: Int64 , srloc :: Int64 = sample(1:vars.vehicles,2,replace=false)
         0         if frloc == srloc
         -             continue
         -         end
- 33115040         if sol[frloc].load - vars.demand[first] + vars.demand[second] > vars.capacity || sol[srloc].load -  vars.demand[second] +  vars.demand[first] > vars.capacity
+        0         fposloc :: Int64 = rand(1:sol[frloc].seqlen)
+        0         sposloc :: Int64 = rand(1:sol[srloc].seqlen)
+        0         first :: Int64 = sol[frloc][fposloc]
+        0         second :: Int64 = sol[srloc][sposloc]
+        0         if (sol[frloc].load - vars.demand[first] + vars.demand[second]) > vars.capacity || (sol[srloc].load - vars.demand[second] + vars.demand[first]) > vars.capacity
         -             continue
         -         end
- 34133216         oldp = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
- 15753792         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
- 34133216         nd = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
-  5251264         nscore = sol.objective - oldp + nd
+        0         oldp::Float64 = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+        0         swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+        0         nd::Float64 = pointdistance(vars, sol, frloc, fposloc) + pointdistance(vars, sol, srloc, sposloc)
+        0         nscore::Float64 = sol.objective - oldp + nd
         0         if nscore < best_sol.objective
-   460656             best_sol = deepcopy(sol)
+        0             sol.objective = nscore
+    18816             best_sol = deepcopy(sol)
         -             continue
-  7811088         elseif rand() <= prob_func(nscore)
+        0         elseif rand() <= prob_func(nscore)
+        0             sol.objective = nscore
         -             continue
         -         else
- 39486976             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
+        0             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
         -         end
         -     end
+        -     # println("delta is ", delta / t, "t is ",t," itr is ",numItr," cycles ",numCycles)
         0     sol2Opt(best_sol, vars)
         -     # solutionCheck(best_sol,vars)
         0     best_sol
@@ -275,23 +266,24 @@
         0     vars = read_input(fl)
         0     sol = getInitialSol(vars)
         0     sol2Opt(sol, vars)
-        0     org_d = sol.objective
+        -     # org_d = sol.objective
         -     numRuns = 1
         -     bestsol = sol
-        0     for i = 1:numRuns
+        0     for _ = 1:numRuns
       336         tmp = deepcopy(sol)
         -         # tmp = deepcopy(destroy_tsp(tmp,vars))
         0         tmp = localSearch(tmp, vars)
+        -         # write(io,join([basename(fl),vars.capacity,mean(vars.demand),std(vars.demand),d,"\n"]," "))
         -         # println("objective is ",tmp.objective)
-       16         tmp.objective = recalc_obj_val(tmp, vars)
+        0         tmp.objective = recalc_obj_val(tmp, vars)
         0         if tmp.objective < bestsol.objective
       336             bestsol = deepcopy(tmp)
         -         end
         -     end
-        0     f_d = bestsol.objective
+        -     # f_d = bestsol.objective
         0     end_time = Base.Libc.time()
-      128     println("initial obj is ", org_d, " final is ", f_d, " improv is ", round(((org_d - f_d) / org_d) * 100, digits=2), "%")
-        0     vis_output(bestsol, vars)
+        -     # println("initial obj is ", org_d, " final is ", f_d, " improv is ", round(((org_d - f_d) / org_d) * 100, digits=2), "%")
+        -     # vis_output(bestsol, vars)
         0     get_output(fl, end_time - start_time, bestsol, vars)
         - 
         - end

@@ -38,7 +38,7 @@ function read_input(fl::String)
             lines = readlines(io)
             lines = [split(i) for i in lines]
             customers, vehicles, capacity = [parse(Int64, i) for i in lines[1]]
-            depot_location = [floor(parse(Float64, i)) for i in lines[2][2:3]]
+            depot_location = [parse(Float64, i) for i in lines[2][2:3]]
             demand = []
             positions = []
             for i = 3:length(lines)
@@ -46,7 +46,7 @@ function read_input(fl::String)
                     break
                 end
                 push!(demand, parse(Float64, lines[i][1]))
-                push!(positions, [floor(parse(Float64, lines[i][j])) for j = 2:3])
+                push!(positions, [parse(Float64, lines[i][j]) for j = 2:3])
             end
             node_pos, node_demand = getSortedDemand(demand)
             dist_m = create_distance_matrix(positions)

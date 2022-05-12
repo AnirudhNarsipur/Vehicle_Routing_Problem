@@ -1,30 +1,30 @@
 using JuMP
 import HiGHS
 struct VRP
-    customers::Number
-    vehicles::Number
-    capacity::Number
-    demand::Vector
-    depot_location::Vector
-    positions::Vector
-    distance_m::Matrix
-    depot_distance::Vector
+    customers::Int64
+    vehicles::Int64
+    capacity::Int64
+    demand::Vector{Int64}
+    depot_location::Vector{Float64}
+    positions::Vector{Vector{Float64}}
+    distance_m::Matrix{Float64}
+    depot_distance::Vector{Float64}
     # Node -> Position in node_pos
-    node_pos::Dict{Number,Number}
+    node_pos::Dict{Int64,Int64}
     #  customer node number  , demand
-    node_demand::Vector{Tuple{Number,Number}}
+    node_demand::Vector{Tuple{Int64,Int64}}
     sorted_d :: Matrix
 end
 mutable struct Route
-    seq::Vector{Number}
-    seqlen::Number
-    load::Number
+    seq::Vector{Int64}
+    seqlen::Int64
+    load::Int64
 end
 
 mutable struct Solution
     routes::Vector{Route}
-    objective::Number
-    nodeloc :: Dict{Number,Tuple{Number,Number}}
+    objective::Float64
+    nodeloc :: Dict{Int64,Tuple{Int64,Int64}}
 end
 Base.getindex(s :: Solution,i :: Int64) =  s.routes[i]
 Base.getindex(r :: Route,i :: Int64) = if i <= r.seqlen r.seq[i] else missing end

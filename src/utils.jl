@@ -1,4 +1,4 @@
-function recalc_obj_val(sol::Solution, vars::VRP)
+function recalc_obj_val(sol::Solution, vars::VRP) :: Float64
     sum(map(r -> route_distance(r, vars), sol.routes))
 end
 
