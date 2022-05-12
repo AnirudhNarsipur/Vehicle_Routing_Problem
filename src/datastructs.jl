@@ -1,5 +1,7 @@
 using JuMP
 import HiGHS
+using StatsBase
+using Random
 struct VRP
     customers::Int64
     vehicles::Int64

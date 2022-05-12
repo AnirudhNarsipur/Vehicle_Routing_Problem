@@ -110,6 +110,7 @@ function solverToSol(vars::VRP, route_mtx)::Solution
     end
     sol = Solution(route_obj, 0,cust_route_dict)
     sol.objective = recalc_obj_val(sol, vars)
+    sol2Opt(sol,vars)
     solutionCheck(sol,vars)
     sol
 end

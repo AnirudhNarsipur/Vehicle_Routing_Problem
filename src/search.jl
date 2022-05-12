@@ -1,7 +1,5 @@
-# module TRP
-using StatsBase
-using Random
-using Distributions
+module TRP
+# using Distributions
 include("./parseInput.jl")
 
 function swapNodes(sol::Solution, vars::VRP, frloc::Int64, fposloc::Int64, srloc::Int64, sposloc::Int64)
@@ -43,16 +41,12 @@ function getSecondNode(dist::Weights, vars::VRP)::Int64
     vars.node_demand[sample(1:vars.customers, dist)][1]
 end
 function localSearch(sol::Solution, vars::VRP) :: Solution
-    # numCycles = 0
     numItr :: UInt64 = 5e+4 * vars.customers
-    # numItr = (numCycles * vars.customers * vars.customers) / 2
-    # sol.objective = recalc_obj_val(sol, vars)
     Temperature::Float64 = abs(sol.objective / log(MathConstants.e, 0.97))
     numRuns = 1
     annealing_cycle::Int64 = (vars.customers * (vars.customers - 1) / 2)
     best_sol = deepcopy(sol)
     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
-    # solutionCheck(sol,vars)
     for _ = 1:numItr
         numRuns += 1
         if numRuns > annealing_cycle
@@ -85,9 +79,7 @@ function localSearch(sol::Solution, vars::VRP) :: Solution
             swapNodes(sol, vars, frloc, fposloc, srloc, sposloc)
         end
     end
-    # println("delta is ", delta / t, "t is ",t," itr is ",numItr," cycles ",numCycles)
     sol2Opt(best_sol, vars)
-    # solutionCheck(best_sol,vars)
     best_sol
 end
 """
@@ -161,15 +153,12 @@ function fulldestroy(fl::String)
     sol = localSearch(sol, vars)
     println("starting sol ", sol.objective)
     # groups = n_rand_groups(vars,3)
-    take = Int(round(0.95 * vars.customers))
+    take = Int(round(0.25 * vars.customers))
     # group = sample(1:vars.customers,take,replace=false)
-    # group = map(x -> x[1] ,vars.node_demand[1:take])
+    # group = map(x -> x[1] ,vars.node_demand[1:take])           
     group = get_closest_routes(sol, vars)
-    vis_output(sol, vars)
-    return nothing
     println("rebuilding with close routes")
     sol = destroy_tsp(sol, vars, group)
-
     println("new sol ", sol.objective)
     vis_output(sol, vars)
 end
@@ -265,30 +254,22 @@ function mn(fl::String)
     start_time = Base.Libc.time()
     vars = read_input(fl)
     sol = getInitialSol(vars)
-    sol2Opt(sol, vars)
-    # org_d = sol.objective
-    numRuns = 1
+    numRuns = 5
     bestsol = sol
     for _ = 1:numRuns
         tmp = deepcopy(sol)
-        # tmp = deepcopy(destroy_tsp(tmp,vars))
         tmp = localSearch(tmp, vars)
-        # write(io,join([basename(fl),vars.capacity,mean(vars.demand),std(vars.demand),d,"\n"]," "))
-        # println("objective is ",tmp.objective)
-        tmp.objective = recalc_obj_val(tmp, vars)
         if tmp.objective < bestsol.objective
             bestsol = deepcopy(tmp)
         end
     end
-    # f_d = bestsol.objective
     end_time = Base.Libc.time()
-    # println("initial obj is ", org_d, " final is ", f_d, " improv is ", round(((org_d - f_d) / org_d) * 100, digits=2), "%")
     # vis_output(bestsol, vars)
     get_output(fl, end_time - start_time, bestsol, vars)
 
 end
 
-# function __init__()
-#     mn(ARGS[1])
-# end
-# end
+function __init__()
+    mn(ARGS[1])
+end
+end
