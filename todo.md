@@ -20,3 +20,4 @@ Do local search again
  -->
 
  Samping routes instead of customers made huge time diff
+ Compile paths

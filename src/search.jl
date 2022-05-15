@@ -93,7 +93,11 @@ function mn(fl::String)
     get_output(fl, end_time - start_time, bestsol, vars)
 end
 function __init__()
+    if length(ARGS) == 0
+        nothing
+    else
     mn(ARGS[1])
+    end
 end
 end
 
