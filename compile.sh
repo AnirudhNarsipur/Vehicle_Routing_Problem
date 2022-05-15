@@ -5,5 +5,4 @@
 ########################################
 
 # Update this file with instructions on how to compile your code
-pip3 install -r requirements.txt
-chmod +x bin/cpoptimizer
+julia -q src/compile.jl

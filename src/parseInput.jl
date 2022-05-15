@@ -4,55 +4,36 @@ include("./utils.jl")
 """
 Return a  vector of distances from nodes to depot
 """
-function depot_distance(positions::Vector, depot_pos::Vector)
+function depot_distance(positions::Matrix{Float64}, depot_pos::Vector)
 
-    c = length(positions)
+    c = size(positions)[1]
     depot_m = zeros(c)
     for i = 1:c
-        depot_m[i] = euc_dist(positions[i], depot_pos)
+        depot_m[i] = euc_dist(positions[i,:], depot_pos)
     end
     depot_m
 end
-function getSortedDemand(demand::Vector)
-    demand_index = map(i -> (i, demand[i]), 1:length(demand))
-    sort!(demand_index)
-    node_dict = Dict()
-    for (index, elem) in enumerate(demand_index)
-        node_dict[elem[1]] = index
-    end
-    return node_dict, demand_index
-end
-function sorted_distance(dist_m::Matrix)
-    l = size(dist_m)[1]
-    sort_m = Matrix{Tuple{Number,Number}}(undef, l, l)
-    for i = 1:l
-        tmp = map(j -> (dist_m[i, j], j), 1:l)
-        sort_m[i,:] = sort(tmp,by=i->i[1])
-    end
-    sort_m
-end
-
 function read_input(fl::String)
     try
         open(fl, "r") do io
             lines = readlines(io)
             lines = [split(i) for i in lines]
             customers, vehicles, capacity = [parse(Int64, i) for i in lines[1]]
+            customers-=1
             depot_location = [parse(Float64, i) for i in lines[2][2:3]]
             demand = []
             positions = []
+            positions = zeros(customers,2)
             for i = 3:length(lines)
                 if length(lines[i]) == 0
                     break
                 end
                 push!(demand, parse(Float64, lines[i][1]))
-                push!(positions, [parse(Float64, lines[i][j]) for j = 2:3])
+                positions[i-2,:] = [parse(Float64, lines[i][j]) for j = 2:3]
             end
-            node_pos, node_demand = getSortedDemand(demand)
             dist_m = create_distance_matrix(positions)
-            VRP(customers - 1, vehicles, capacity, demand, depot_location,
-                positions, dist_m, depot_distance(positions, depot_location),
-                node_pos, node_demand, sorted_distance(dist_m))
+            VRP(customers, vehicles, capacity, demand, depot_location,
+                positions, dist_m, depot_distance(positions, depot_location))
         end
     catch
         error("could not read file!")
@@ -111,7 +92,7 @@ function solverToSol(vars::VRP, route_mtx)::Solution
     sol = Solution(route_obj, 0,cust_route_dict)
     sol.objective = recalc_obj_val(sol, vars)
     sol2Opt(sol,vars)
-    solutionCheck(sol,vars)
+    # solutionCheck(sol,vars)
     sol
 end
 """
@@ -121,34 +102,6 @@ function getInitialSol(vars::VRP)
     route_mtx = lpSolver(vars)
     solverToSol(vars, route_mtx)
 end
-
-function read_goog_vrp(fl::String, vars::VRP)
-    try
-        open(fl, "r") do io
-            lines = readlines(io)
-            lines = [split(i) for i in lines]
-            objective = parse(Float64, lines[1][1])
-            # println("i is ",lines[2][2:end-1]," length ",length(lines[2][2:end-1]))
-            routes = [map(x -> parse(Int64, x), i[2:end-1]) for i in lines[2:end]]
-            # println("routes are ",routes)
-            route_obj = []
-            for route in routes
-                load = 0
-                for cust in route
-                    load += vars.demand[cust]
-                end
-                ln = length(route)
-                push!(route_obj, Route(resize!(route, vars.customers), ln, load))
-            end
-            sol = Solution(route_obj, objective,Dict())
-            sol2Opt(sol,vars)
-            sol
-        end
-    catch
-        error("could not read test vrp file")
-    end
-end
-
 function get_output(fl::String, time, sol::Solution, vars::VRP)
     kv_json = (k, v) -> join(['"', k, """": """, '"', v, '"'])
     solo = []

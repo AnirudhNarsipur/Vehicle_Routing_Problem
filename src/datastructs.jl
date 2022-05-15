@@ -2,20 +2,22 @@ using JuMP
 import HiGHS
 using StatsBase
 using Random
+
 struct VRP
     customers::Int64
     vehicles::Int64
     capacity::Int64
     demand::Vector{Int64}
     depot_location::Vector{Float64}
-    positions::Vector{Vector{Float64}}
+    positions::Matrix{Float64}
     distance_m::Matrix{Float64}
     depot_distance::Vector{Float64}
+    #Not Needed : 
     # Node -> Position in node_pos
-    node_pos::Dict{Int64,Int64}
-    #  customer node number  , demand
-    node_demand::Vector{Tuple{Int64,Int64}}
-    sorted_d :: Matrix
+    # node_pos::Dict{Int64,Int64}
+    # #  customer node number  , demand
+    # node_demand::Vector{Tuple{Int64,Int64}}
+    # sorted_d :: Matrix
 end
 mutable struct Route
     seq::Vector{Int64}

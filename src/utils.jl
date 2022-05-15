@@ -16,17 +16,18 @@ function route_distance(route::Route, vars::VRP)
     end
     distances
 end
-function euc_dist(a::Vector, b::Vector)
+function euc_dist(a::Vector{Float64}, b::Vector{Float64})
     sqrt(sum((a - b) .^ 2))
 end
 
 
-function create_distance_matrix(positions::Vector)
-    c = length(positions)
+function create_distance_matrix(positions::Matrix{Float64})
+    c = size(positions)[1]
     dist_m = zeros(c, c)
     for i = 1:c
         for j = 1:c
-            dist_m[i, j] = euc_dist(positions[i], positions[j])
+           
+            dist_m[i, j] = euc_dist(positions[i,:], positions[j,:])
         end
     end
     dist_m
@@ -35,7 +36,7 @@ end
 Given a solution and a customer
 return (routenumber,number in route)
 """
-function findCloc(sol::Solution, customer::Number)
+function findCloc(sol::Solution, customer::Int64)
     for (i, route) in enumerate(sol.routes)
         for j = 1:route.seqlen
             if route.seq[j] == customer
@@ -48,8 +49,8 @@ end
 """
 Return a dictionary of customer route assigments
 """
-function get_customer_routes(sol :: Solution) :: Dict{Number,Number}
-    c_r = Dict{Number,Number}()
+function get_customer_routes(sol :: Solution) :: Dict{Int64,Int64}
+    c_r = Dict{Int64,Int64}()
     for i = 1:length(sol.routes)
         for j=1:sol.routes[i].seqlen
             c_r[sol.routes[i].seq[j]] =  i 
@@ -63,7 +64,7 @@ end
 2. take route[i] to route[k] and add them in reverse order to new_route
 3. take route[k+1] to end and add them in order to new_route
 """
-function opt2Swap(route::Route, i::Number, k::Number)
+function opt2Swap(route::Route, i::Int64, k::Int64)
     reverse!(view(route.seq, i:k))
 end
 
@@ -102,7 +103,7 @@ end
 """
 Calculate the total load of the current route
 """
-function calc_route_load(route::Route, vars::VRP)::Number
+function calc_route_load(route::Route, vars::VRP)::Int
     reduce((base,elem) -> base + vars.demand[route.seq[elem]],1:route.seqlen,init=0)
 end
 
@@ -172,4 +173,14 @@ function solutionCheck(sol :: Solution,vars :: VRP)
     for c in 1:vars.customers
         @assert(findCloc(sol,c) == sol.nodeloc[c])
     end
+end
+
+function sol_to_mat(sol :: Solution,vars :: VRP)
+    mtx = zeros(vars.vehicles,vars.customers)
+    for (i,route) in enumerate(sol.routes)
+        for j=1:route.seqlen
+            mtx[i,route.seq[j]] = 1
+        end
+    end
+    mtx
 end
