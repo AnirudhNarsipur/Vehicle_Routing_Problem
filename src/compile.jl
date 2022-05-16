@@ -1,4 +1,4 @@
-import Pkg
+import Pkg; Pkg.add("PackageCompiler")
 using PackageCompiler
 
 Pkg.add(["JuMP","HiGHS","StatsBase"])
