@@ -120,7 +120,9 @@ function get_output(fl::String, time, sol::Solution)
     ])
     println(out)
 end
-
+"""
+Gets Output in Viz format
+"""
 function vis_output(sol::Solution, vars::VRP)
     lines = [string(sol.objective) * " 0"]
     for route in sol.routes

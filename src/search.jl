@@ -1,6 +1,8 @@
 module TRP
 include("./parseInput.jl")
-
+"""
+Swaps Two customers in the Solution
+"""
 function swapNodes(sol::Solution, vars::VRP, frloc::Int64, fposloc::Int64, srloc::Int64, sposloc::Int64)
     fdemand = vars.demand[sol.routes[frloc].seq[fposloc]]
     sdemand = vars.demand[sol.routes[srloc].seq[sposloc]]
@@ -11,7 +13,9 @@ function swapNodes(sol::Solution, vars::VRP, frloc::Int64, fposloc::Int64, srloc
     sol.routes[srloc].seq[sposloc] = tmp
     nothing
 end
-
+"""
+Given a node : Y in the route A->X->Y->Z->B calculates distance X->Y->Z
+"""
 function pointdistance(vars::VRP, sol::Solution, rloc::Int64, rpos::Int64)::Float64
     c::Int64 = sol.routes[rloc].seq[rpos]
     if sol.routes[rloc].seqlen <= 1
@@ -24,10 +28,12 @@ function pointdistance(vars::VRP, sol::Solution, rloc::Int64, rpos::Int64)::Floa
         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
     end
 end
-
-function localSearch(sol::Solution, vars::VRP) :: Solution
-    numItr::UInt64 = round((154579.1256 + 150.2166590*vars.customers + 54.10538*vars.customers^2))
-    Temperature::Float64 = abs(sol.objective / log(MathConstants.e, 0.97)) * 0.001 
+"""
+Core Local Search (Simulated Annealing)
+"""
+function localSearch(sol::Solution, vars::VRP)::Solution
+    numItr::UInt64 = round((154579.1256 + 150.2166590 * vars.customers + 54.10538 * vars.customers^2))
+    Temperature::Float64 = abs(sol.objective / log(MathConstants.e, 0.97)) * 0.001
     numRuns = 1
     annealing_cycle::Int64 = (vars.customers * (vars.customers - 1) / 2)
     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
@@ -67,11 +73,14 @@ function localSearch(sol::Solution, vars::VRP) :: Solution
     sol2Opt(best_sol, vars)
     best_sol
 end
+"""
+Driver code
+"""
 function mn(fl::String)
     start_time = Base.Libc.time()
     vars = read_input(fl)
     sol = getInitialSol(vars)
-    numRuns = 30
+    numRuns = 20
     bestsol = sol
     for _ = 1:numRuns
         tmp = deepcopy(sol)
@@ -87,7 +96,7 @@ function __init__()
     if length(ARGS) == 0
         nothing
     else
-    mn(ARGS[1])
+        mn(ARGS[1])
     end
 end
 end
