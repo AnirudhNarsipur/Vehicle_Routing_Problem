@@ -26,24 +26,14 @@ function pointdistance(vars::VRP, sol::Solution, rloc::Int64, rpos::Int64)::Floa
         vars.distance_m[c, sol.routes[rloc].seq[rpos-1]] + vars.distance_m[c, sol.routes[rloc].seq[rpos+1]]
     end
 end
-function get_dist(vars::VRP)::Vector{Weights}
-    ls = []
-    v = mean(vars.demand) / 2
-    for i = 1:vars.customers
-        pdfvals = [abs(i - j) <= v ? 1 : 0 for j in 1:vars.customers]
-        pdfvals[i] = 0
-        push!(ls, Weights(StatsBase.LinearAlgebra.normalize(pdfvals)))
-    end
-    ls
-end
 
-function localSearch(sol::Solution, vars::VRP)
-    numItr::UInt64 = round(154579.1256 + 150.2166590*vars.customers + 54.10538*vars.customers^2)
-    Temperature::Float64 = abs(sol.objective / log(MathConstants.e, 0.97)) * 0.001
+function localSearch(sol::Solution, vars::VRP) :: Solution
+    numItr::UInt64 = round((154579.1256 + 150.2166590*vars.customers + 54.10538*vars.customers^2))
+    Temperature::Float64 = abs(sol.objective / log(MathConstants.e, 0.97)) * 0.001 
     numRuns = 1
     annealing_cycle::Int64 = (vars.customers * (vars.customers - 1) / 2)
-    best_sol = deepcopy(sol)
     prob_func = (ns) -> exp((sol.objective - ns) / Temperature)
+    best_sol = deepcopy(sol)
     for _ = 1:numItr
         numRuns += 1
         if numRuns > annealing_cycle
@@ -51,6 +41,9 @@ function localSearch(sol::Solution, vars::VRP)
             Temperature *= 0.95
         end
         frloc::Int64, srloc::Int64 = sample(1:vars.vehicles, 2, replace=false)
+        if sol[frloc].seqlen == 0 || sol[srloc].seqlen == 0
+            continue
+        end
         fposloc::Int64 = rand(1:sol[frloc].seqlen)
         sposloc::Int64 = rand(1:sol[srloc].seqlen)
         first::Int64 = sol[frloc][fposloc]
@@ -90,7 +83,7 @@ function mn(fl::String)
         end
     end
     end_time = Base.Libc.time()
-    get_output(fl, end_time - start_time, bestsol, vars)
+    get_output(fl, end_time - start_time, bestsol)
 end
 function __init__()
     if length(ARGS) == 0

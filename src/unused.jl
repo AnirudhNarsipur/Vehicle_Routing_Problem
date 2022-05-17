@@ -287,3 +287,13 @@ end
 function getSecondNode(dist::Weights, vars::VRP)::Int64
     vars.node_demand[sample(1:vars.customers, dist)][1]
 end
+function get_dist(vars::VRP)::Vector{Weights}
+    ls = []
+    v = mean(vars.demand) / 2
+    for i = 1:vars.customers
+        pdfvals = [abs(i - j) <= v ? 1 : 0 for j in 1:vars.customers]
+        pdfvals[i] = 0
+        push!(ls, Weights(StatsBase.LinearAlgebra.normalize(pdfvals)))
+    end
+    ls
+end

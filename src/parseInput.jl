@@ -102,7 +102,7 @@ function getInitialSol(vars::VRP)
     route_mtx = lpSolver(vars)
     solverToSol(vars, route_mtx)
 end
-function get_output(fl::String, time, sol::Solution, vars::VRP)
+function get_output(fl::String, time, sol::Solution)
     kv_json = (k, v) -> join(['"', k, """": """, '"', v, '"'])
     solo = []
     for route in sol.routes

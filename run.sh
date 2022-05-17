@@ -12,4 +12,4 @@ fi
 	
 input=$1
 # run the solver
-julia  -JLSearch.so src/search.jl $input
+julia  -Jsrc/LSearch.so src/search.jl $input
