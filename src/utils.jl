@@ -96,7 +96,6 @@ function sol2Opt(sol::Solution, vars::VRP)
         complete2optSwap(route, vars)
     end
     sol.objective = recalc_obj_val(sol, vars)
-    sol.nodeloc = customer_route_loc(sol)
 
 end
 

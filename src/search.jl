@@ -6,8 +6,6 @@ function swapNodes(sol::Solution, vars::VRP, frloc::Int64, fposloc::Int64, srloc
     sdemand = vars.demand[sol.routes[srloc].seq[sposloc]]
     sol.routes[frloc].load = sol.routes[frloc].load - fdemand + sdemand
     sol.routes[srloc].load = sol.routes[srloc].load - sdemand + fdemand
-    sol.nodeloc[sol.routes[frloc].seq[fposloc]] = (srloc, sposloc)
-    sol.nodeloc[sol.routes[srloc].seq[sposloc]] = (frloc, fposloc)
     tmp = sol.routes[frloc].seq[fposloc]
     sol.routes[frloc].seq[fposloc] = sol.routes[srloc].seq[sposloc]
     sol.routes[srloc].seq[sposloc] = tmp

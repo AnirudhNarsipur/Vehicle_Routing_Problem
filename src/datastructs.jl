@@ -28,7 +28,11 @@ end
 mutable struct Solution
     routes::Vector{Route}
     objective::Float64
-    nodeloc :: Dict{Int64,Tuple{Int64,Int64}}
+end
+
+mutable struct Distrib
+    weights :: Weights
+    combs :: Vector{Tuple{Int64,Int64}}
 end
 Base.getindex(s :: Solution,i :: Int64) =  s.routes[i]
 Base.getindex(r :: Route,i :: Int64) = if i <= r.seqlen r.seq[i] else missing end
