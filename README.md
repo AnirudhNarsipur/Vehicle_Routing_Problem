@@ -7,3 +7,5 @@ The project focuses on a simplification of the Vehicle Routing Problem : Given a
 routes for **t** trucks to deliver the goods from the depot.
 
 My solution uses a combination of Linear Programming and simulated annealing. The presentation pdf (in the repo) contains a bit more detail.
+
+This was joint work with Kate Nelson.
