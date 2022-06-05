@@ -1,4 +1,4 @@
-# Vehicle_Routing_Problem
+# Vehicle Routing Problem
 
 This repository contains my final project for CSCI 2951-O "Foundations of Prescriptive Analytics" an advanced graduate course I took in my sophmore spring (2022)
 at Brown University.
